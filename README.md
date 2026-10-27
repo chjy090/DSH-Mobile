@@ -8,14 +8,12 @@ Web GUI，把桌面端的使用体验带到手机上。
 
 当前版本：**v0.4.2**（versionCode 9）。
 
-> v0.4.1 起移除 WebView 右上角的悬浮 ⋮ 按钮（v0.4.0 会遮挡 dsh GUI 右上角
-> 「打开右侧边栏」），应用菜单改由**系统返回手势/返回键**在根页面弹出
-> （AlertDialog：刷新 / 退出当前会话 / 忘记此设备（重新配对）/ 诊断日志 / 关于 / 退出应用）。
+## 版本与更新
 
-> v0.4.2 起认证网关模式支持**启动静默登录**与**前台恢复自动续期**：已登录过的设备冷启动
-> 直接用 deviceToken 换会话进入 GUI，不闪登录页；「退出当前会话」只结束服务端 session，
-> 下次冷启动仍会自动登录；「忘记此设备（重新配对）」删除本机设备凭据，必须重新扫码。
-> 首次扫码配对仍必须完成网关登录（用户名/密码；TOTP 在生成配对二维码时校验）。
+- **版本变更与发行说明统一发布在 GitHub Releases**：<https://github.com/chjy090/DSH-Mobile/releases>（每个版本都包含 release notes、APK 与 SHA-256）。
+- **升级方式**：下载最新 Release 的 `DSH-Mobile-vX.Y.Z-release.apk`，直接覆盖安装即可——签名一致、应用数据与配对状态保留，无需卸载。
+- **回滚方式**：安装目标旧版本的 Release APK 覆盖安装；若系统阻止降级，先卸载再安装（会清空本地数据，需要重新扫码配对）。
+- **查看当前版本**：应用菜单 →「关于」；或 `adb shell dumpsys package ai.deepseek.dsh.mobile | grep version`。
 
 > 本仓库根目录即 Android Gradle 工程根目录：`build.gradle.kts`、`settings.gradle.kts`、
 > `gradle.properties`、`gradle/`、`gradlew` 与 `app/` 模块都在根目录，克隆后直接在根目录构建。
