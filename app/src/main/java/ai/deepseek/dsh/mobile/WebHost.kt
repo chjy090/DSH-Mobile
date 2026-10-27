@@ -1,6 +1,7 @@
 package ai.deepseek.dsh.mobile
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -28,6 +29,7 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import java.util.Locale
@@ -1120,19 +1122,79 @@ class WebHost(
                     )
                     showToast(activity.getString(R.string.download_failed), long = false)
                 },
-                onDone = { savedName ->
-                    val message = try {
-                        activity.getString(R.string.download_saved, savedName)
-                    } catch (t: Throwable) {
-                        Log.w(TAG, "format download message failed", t)
-                        activity.getString(R.string.download_started)
-                    }
-                    showToast(message, long = true)
+                onDone = { savedName, contentUri ->
+                    showDownloadSaved(savedName, contentUri)
                 }
             )
         } catch (t: Throwable) {
             Log.e(TAG, "start download failed: ${AppConfig.redactForLog(target)}", t)
             showToast(activity.getString(R.string.download_failed), long = false)
+        }
+    }
+
+    /**
+     * 下载完成提示（v0.4.4）。
+     *
+     * 文件已经由 [Downloader] 写入公共 Download 目录并回传**最终文件名**。
+     * - Activity 在前台且 MediaStore 返回了可打开的 content Uri：弹轻量对话框，
+     *   文案保持「已保存到系统下载目录：<最终文件名>」，并提供「打开」入口；
+     * - 其它情况（后台、API ≤28 无 content Uri、弹窗失败）：退回原 Toast，行为不变。
+     *
+     * 打开失败（没有 ACTION_VIEW 处理应用）只提示文件保存位置，不崩溃、不申请额外权限。
+     */
+    private fun showDownloadSaved(savedName: String, contentUri: Uri?) {
+        val message = try {
+            activity.getString(R.string.download_saved, savedName)
+        } catch (t: Throwable) {
+            Log.w(TAG, "format download message failed", t)
+            activity.getString(R.string.download_started)
+        }
+        if (contentUri == null || !isActivityResumed()) {
+            showToast(message, long = true)
+            return
+        }
+        try {
+            AlertDialog.Builder(activity)
+                .setMessage(message)
+                .setPositiveButton(R.string.download_open) { _, _ ->
+                    openDownloadedFile(contentUri, savedName)
+                }
+                .setNegativeButton(R.string.download_done, null)
+                .show()
+        } catch (t: Throwable) {
+            Log.w(TAG, "show download saved dialog failed", t)
+            showToast(message, long = true)
+        }
+    }
+
+    private fun isActivityResumed(): Boolean {
+        if (destroyed) return false
+        return try {
+            !activity.isFinishing && !activity.isDestroyed &&
+                activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    private fun openDownloadedFile(uri: Uri, savedName: String) {
+        try {
+            val mimeType = try {
+                activity.contentResolver.getType(uri)
+            } catch (t: Throwable) {
+                null
+            }?.takeIf { it.isNotBlank() } ?: "*/*"
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            activity.startActivity(intent)
+        } catch (t: ActivityNotFoundException) {
+            Log.w(TAG, "no activity to open downloaded file")
+            showToast(activity.getString(R.string.download_open_failed, savedName), long = true)
+        } catch (t: Throwable) {
+            Log.w(TAG, "open downloaded file failed: ${t.javaClass.simpleName}")
+            showToast(activity.getString(R.string.download_open_failed, savedName), long = true)
         }
     }
 

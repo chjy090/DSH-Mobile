@@ -2159,9 +2159,9 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun showAbout() {
         val versionName = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.3"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.4"
         } catch (t: Throwable) {
-            "0.4.3"
+            "0.4.4"
         }
 
         // v0.4.3：版本号 TextView 是「直连模式」隐藏入口（连续点击 7 次解锁/锁定）；

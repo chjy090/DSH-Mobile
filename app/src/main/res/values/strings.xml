@@ -87,6 +87,9 @@
     <!-- 操作反馈 -->
     <string name="download_started">已开始下载</string>
     <string name="download_saved">已保存到系统下载目录：%1$s</string>
+    <string name="download_open">打开</string>
+    <string name="download_done">完成</string>
+    <string name="download_open_failed">未找到可打开该文件的应用；文件已保存在系统下载目录：%1$s</string>
     <string name="download_failed">下载失败</string>
     <string name="download_permission_denied">未获得存储权限，无法保存到下载目录</string>
     <string name="download_unsupported">该链接暂不支持下载</string>
