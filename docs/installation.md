@@ -1,13 +1,13 @@
 # DSH Mobile 安装与配置指南
 
-> 适用客户端：**DSH Mobile v0.4.2**（versionCode `9`，applicationId `ai.deepseek.dsh.mobile`）
+> 适用客户端：**DSH Mobile v0.4.3**（versionCode `10`，applicationId `ai.deepseek.dsh.mobile`）
 >
 > 配套服务端：`dsh` + [`dsh-auth-gate`](https://github.com/chjy090/dsh-auth-gate) v0.4.0 及以上。
 > 其中「认证网关模式」的扫码配对、设备令牌与自动续期需要该插件；`publicFingerprint`
 > （反向代理证书指纹）需要 `dsh-auth-gate` v0.6.2 及以上。
 >
 > 本文以**认证网关模式（推荐）**为主线；旧的「服务器地址 + 访问令牌」直连模式作为兼容方式
-> 放在 §4.7。
+> 放在 §4.7（v0.4.3 起默认隐藏，需在「关于」里连点版本号 7 次解锁）。
 
 本文中的地址均为占位符，请替换成你自己的部署：
 
@@ -31,7 +31,7 @@
 | CPU 架构 | 发布 APK 含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 原生库；主流 ARM 手机可直接安装 |
 | 系统 WebView | 需要可用的 Android System WebView。App 自身不检查 WebView 版本，但 `dsh` Web GUI 依赖较新的 Chromium；页面异常时先更新 WebView |
 | 存储 | APK 约 25.5 MB；建议至少预留 100 MB |
-| 相机（可选） | 扫码配对需要；无相机仍可安装，但 v0.4.2 无法完成扫码配对（见 §4.2 说明） |
+| 相机（可选） | 扫码配对需要；v0.4.3 无相机时可用「从相册选择二维码」，两者都不可用时见 §4.7 的隐藏直连模式 |
 | 麦克风（可选） | 语音输入需要；还要求页面是 `https://` 安全上下文 |
 | Google 服务 | **不需要** Google Play Services；二维码识别使用 bundled ML Kit |
 
@@ -54,6 +54,9 @@
 > v0.4.2 起认证网关模式支持**启动静默登录**（冷启动直接进 GUI，不闪登录页）和
 > **前台恢复自动续期**（GUI 已登录且距上次成功续期超过 1 小时，后台换新会话、不刷新页面）；
 > 首次扫码配对仍必须完成网关登录（用户名/密码；TOTP 在生成配对二维码时校验）。
+>
+> v0.4.3 起配对页新增「从相册选择二维码」（无需相机/存储权限），直连模式默认隐藏；
+> 解锁方式与限制见 §4.7。
 
 ### 1.3 网络
 
@@ -86,10 +89,13 @@
 Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。文件选择走系统文件选择器，
 不需要额外存储权限。
 
+「从相册选择二维码」（v0.4.3）使用系统照片选择器（Android 13+）或回退的系统文件选择器读取
+单张图片，**不需要**存储权限，也不会把图片上传或保存；识别结果仍走与扫码相同的严格校验。
+
 ### 1.5 开始前检查清单
 
 - [ ] 手机为 Android 8.0+，能安装 APK。
-- [ ] 已取得 `DSH-Mobile-v0.4.2-release.apk`，SHA-256 与 §2.2 一致。
+- [ ] 已取得 `DSH-Mobile-v0.4.3-release.apk`，SHA-256 与 §2.2 一致。
 - [ ] 服务端 `dsh` 与 `dsh-auth-gate` 正常运行。
 - [ ] 手机浏览器能打开 `https://<host>:3443/__auth/login`（自签证书会先提示，属正常）。
 - [ ] 管理页 `/__admin` 已完成初始化，TOTP 可正常生成 6 位验证码。
@@ -104,26 +110,26 @@ Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。�
 
 发布页：
 
-- 版本页：<https://github.com/chjy090/DSH-Mobile/releases/tag/v0.4.2>（由 Lead 验证后发布）
+- 版本页：<https://github.com/chjy090/DSH-Mobile/releases/tag/v0.4.3>（由 Lead 验证后发布）
 - APK 直链：
-  <https://github.com/chjy090/DSH-Mobile/releases/download/v0.4.2/DSH-Mobile-v0.4.2-release.apk>
+  <https://github.com/chjy090/DSH-Mobile/releases/download/v0.4.3/DSH-Mobile-v0.4.3-release.apk>
 
-v0.4.2 的 Release 资产：
+v0.4.3 的 Release 资产：
 
 | 文件 | 说明 |
 | --- | --- |
-| `DSH-Mobile-v0.4.2-release.apk` | 签名后的 release APK |
-| `SHA256SUMS-v0.4.2.txt` | APK 的 SHA-256 校验文件 |
-| `release-notes-v0.4.2.md` | 发布说明 |
+| `DSH-Mobile-v0.4.3-release.apk` | 签名后的 release APK |
+| `SHA256SUMS-v0.4.3.txt` | APK 的 SHA-256 校验文件 |
+| `release-notes-v0.4.3.md` | 发布说明 |
 
 当前构建版本信息（本地 `deliverables/` 与构建产物已核对；GitHub Release 待 Lead 发布）：
 
 | 项目 | 值 |
 | --- | --- |
-| versionName | `0.4.2` |
-| versionCode | `9` |
-| 文件大小 | 25,516,087 字节（约 24.33 MiB） |
-| SHA-256 | `1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495` |
+| versionName | `0.4.3` |
+| versionCode | `10` |
+| 文件大小 | 25,519,147 字节（约 24.34 MiB） |
+| SHA-256 | `35cfdfbae6c97b1bbb1821f36b55b459246c784fffafa23da84153091ddf0304` |
 | 签名证书 SHA-256 | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
 
 > 只从上述官方 Release 或你信任的内部渠道获取 APK。不要使用来源不明的“破解版”“去广告版”
@@ -137,27 +143,27 @@ Linux/macOS：
 
 ```bash
 cd ~/Downloads
-sha256sum DSH-Mobile-v0.4.2-release.apk
-# macOS 也可用：shasum -a 256 DSH-Mobile-v0.4.2-release.apk
+sha256sum DSH-Mobile-v0.4.3-release.apk
+# macOS 也可用：shasum -a 256 DSH-Mobile-v0.4.3-release.apk
 ```
 
 期望输出：
 
 ```text
-1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495  DSH-Mobile-v0.4.2-release.apk
+35cfdfbae6c97b1bbb1821f36b55b459246c784fffafa23da84153091ddf0304  DSH-Mobile-v0.4.3-release.apk
 ```
 
-如果同时下载了 `SHA256SUMS-v0.4.2.txt`，可在同一目录执行：
+如果同时下载了 `SHA256SUMS-v0.4.3.txt`，可在同一目录执行：
 
 ```bash
-sha256sum -c SHA256SUMS-v0.4.2.txt
-# 期望：DSH-Mobile-v0.4.2-release.apk: OK
+sha256sum -c SHA256SUMS-v0.4.3.txt
+# 期望：DSH-Mobile-v0.4.3-release.apk: OK
 ```
 
 Windows PowerShell：
 
 ```powershell
-Get-FileHash .\DSH-Mobile-v0.4.2-release.apk -Algorithm SHA256
+Get-FileHash .\DSH-Mobile-v0.4.3-release.apk -Algorithm SHA256
 ```
 
 哈希不一致时**不要安装**，重新下载并再次校验。
@@ -169,7 +175,7 @@ Get-FileHash .\DSH-Mobile-v0.4.2-release.apk -Algorithm SHA256
 ```bash
 export ANDROID_HOME=/path/to/android-sdk
 "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-  --verbose --print-certs DSH-Mobile-v0.4.2-release.apk
+  --verbose --print-certs DSH-Mobile-v0.4.3-release.apk
 ```
 
 期望结果包含：
@@ -188,13 +194,13 @@ DSH Mobile，否则会因签名不一致失败；也不要信任该文件。
 
 ```bash
 "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
-  DSH-Mobile-v0.4.2-release.apk | head -n 8
+  DSH-Mobile-v0.4.3-release.apk | head -n 8
 ```
 
 应能看到：
 
 ```text
-package: name='ai.deepseek.dsh.mobile' versionCode='9' versionName='0.4.2' ...
+package: name='ai.deepseek.dsh.mobile' versionCode='10' versionName='0.4.3' ...
 minSdkVersion:'26'
 targetSdkVersion:'35'
 ```
@@ -219,13 +225,13 @@ targetSdkVersion:'35'
 
 ```bash
 adb devices                 # 确认设备已授权
-adb install DSH-Mobile-v0.4.2-release.apk
+adb install DSH-Mobile-v0.4.3-release.apk
 ```
 
 已安装同签名旧版本时，覆盖安装：
 
 ```bash
-adb install -r DSH-Mobile-v0.4.2-release.apk
+adb install -r DSH-Mobile-v0.4.3-release.apk
 ```
 
 安装后确认版本：
@@ -237,11 +243,11 @@ adb shell dumpsys package ai.deepseek.dsh.mobile | grep -E "versionCode|versionN
 期望类似：
 
 ```text
-versionCode=9 minSdk=26 targetSdk=35
-versionName=0.4.2
+versionCode=10 minSdk=26 targetSdk=35
+versionName=0.4.3
 ```
 
-> v0.4.2 的 release APK 使用 v2 签名方案；Android 8.0+ 支持。不要用 `adb install` 安装
+> v0.4.3 的 release APK 使用 v2 签名方案；Android 8.0+ 支持。不要用 `adb install` 安装
 > `app-debug.apk` 去覆盖 release 包，debug 与 release 签名不同，会报
 > `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。
 
@@ -259,8 +265,8 @@ versionName=0.4.2
 
 ### 2.5 versionCode 与 versionName
 
-- `versionName` 是给人看的版本号（`0.4.2`），App「关于」对话框显示的是它。
-- `versionCode` 是给 Android 比较新旧的整数（`9`）。正常安装要求新包的 versionCode
+- `versionName` 是给人看的版本号（`0.4.3`），App「关于」对话框显示的是它。
+- `versionCode` 是给 Android 比较新旧的整数（`10`）。正常安装要求新包的 versionCode
   不低于已安装版本；降级需要显式允许（`adb install -r -d`）。
 - 覆盖升级时 Android 还会校验签名证书一致；versionCode 高但签名不同同样无法安装。
 
@@ -346,7 +352,7 @@ journalctl -u dsh -n 200 --no-pager | grep -iE 'auth-gate|listening|error'
 
 ---
 
-## 4. 首次使用：扫码配对
+## 4. 首次使用：扫码 / 相册配对
 
 ### 4.1 在服务端生成配对二维码
 
@@ -367,27 +373,41 @@ journalctl -u dsh -n 200 --no-pager | grep -iE 'auth-gate|listening|error'
 > **不要把二维码截图发到群里或保存到公共相册。** 任何人在 120 秒内拿到这张二维码，
 > 都可以抢先把它兑换成自己设备的绑定。过期或怀疑泄露时，直接重新生成。
 
-### 4.2 在 App 中扫码
+### 4.2 在 App 中扫码或从相册选择
+
+**方式 A：扫码（推荐）**
 
 1. 打开 DSH Mobile。首次启动显示「连接 DSH Host」。
 2. 点蓝色主按钮 **「扫码配对」**。
 3. 首次使用会弹出系统相机权限请求，选择「允许」。
    - 拒绝后扫码页会提示并退出；需要到系统设置 → 应用 → DSH Mobile → 权限 → 相机中重新允许。
 4. 把二维码放入取景框，保持稳定。识别成功后手机会震动一次并自动返回 App。
-5. App 弹出「确认配对」对话框，显示：
+
+**方式 B：从相册选择二维码（v0.4.3；相机不可用或二维码已保存为截图时）**
+
+1. 在配对页点 **「从相册选择二维码」**（位于「扫码配对」下方）。
+2. 系统弹出照片选择器（Android 13+）或文件选择器（低版本），选择含配对二维码的**原图截图/照片**。
+   - 不需要相机权限，也不需要存储权限；App 只读取你选中的这一张图片，不上传、不保存。
+   - 转发到聊天软件后被压缩的图片可能识别失败，请使用原图。
+3. 识别成功后直接进入下面的「确认配对」对话框；未识别到有效二维码时提示
+   「未能从图片中识别配对二维码，请使用原图截图（勿用转发压缩图）重试」，不会崩溃或卡住。
+
+**确认与兑换（两种方式相同）**
+
+1. App 弹出「确认配对」对话框，显示：
    - **服务器**：`https://<host>:3443` 或 `https://auth.example.com:8443`；
    - **证书 SHA-256**：64 位十六进制指纹；
    - 一段说明：此设备首次配对会向该服务器注册设备，并保存用于自动续期的设备凭据。
-6. **逐字核对服务器地址和证书指纹**。确认二维码来自你的管理页、地址与指纹都正确后，点「确定」。
+2. **逐字核对服务器地址和证书指纹**。确认二维码来自你的管理页、地址与指纹都正确后，点「确定」。
    - 地址或指纹不对：点「取消」，不要继续；重新生成二维码并检查服务端配置。
-7. App 显示不可取消的兑换进度，向 `POST /__auth/pair/redeem` 提交 ticket 和手机型号作为设备名。
+3. App 显示不可取消的兑换进度，向 `POST /__auth/pair/redeem` 提交 ticket 和手机型号作为设备名。
    - 成功后 Toast「配对成功，请登录」；
    - 失败会弹出「配对失败」及错误详情（如 `HTTP 401 · expired_ticket`），见 §8。
 
-> **v0.4.2 没有“从相册选二维码”或“粘贴配对链接”的入口。** 不要用系统相机、微信等
-> 扫描二维码：通常只会打开浏览器里的配对页，不会把配置写入 App。必须用 App 内的「扫码配对」。
-> 相机不可用或无法扫码时，只能改用 §4.7 的旧直连模式（且不适用于认证网关），或换一台
-> 能显示二维码的设备。
+> **不要用系统相机、微信等扫描二维码**：通常只会打开浏览器里的配对页，不会把配置写入 App。
+> 请使用 App 内的「扫码配对」或「从相册选择二维码」。图片识别与扫码使用同一套严格校验
+> （只接受 `https://…/__auth/pair` 载荷），**不会因为来自相册而放宽**。
+> 相机与相册都不可用时，可在「关于」连点版本号 7 次解锁 §4.7 的直连模式（不适用于认证网关）。
 
 ### 4.3 配对二维码里有什么
 
@@ -442,7 +462,7 @@ https://auth.example.com:8443/__auth/pair#v=1&t=<一次性ticket>&fp=<64位证�
 
 ### 4.5 配对成功的检查
 
-- [ ] App「关于」显示 `0.4.2`。
+- [ ] App「关于」显示 `0.4.3`。
 - [ ] 管理页「设备」出现一条以手机型号命名的设备，平台显示为 `安卓`/`android`。
 - [ ] 登录后能看到 `dsh` Web GUI，而不是停在登录页或错误页。
 - [ ] 返回手势能弹出「应用菜单」。
@@ -456,9 +476,21 @@ https://auth.example.com:8443/__auth/pair#v=1&t=<一次性ticket>&fp=<64位证�
 4. 查看 App 弹窗中的错误码（§8.2）。
 5. 若提示证书/指纹问题，先按 §6.3 处理，不要盲目重装 App。
 
-### 4.7 旧直连模式（仅普通 dsh，不适用于认证网关）
+### 4.7 旧直连模式（高级，v0.4.3 起默认隐藏；仅普通 dsh，不适用于认证网关）
 
-如果服务端没有安装 `dsh-auth-gate`，仍可使用 v0.3.0 以来的直连模式：
+v0.4.3 起配对页**默认只显示**「扫码配对」与「从相册选择二维码」，直连模式隐藏：
+
+1. 在配对页（或主界面）用系统返回手势/返回键打开「应用菜单」→「关于」。
+2. 连续点击「关于」里的版本号 **7 次**（相邻两次间隔不超过 2 秒）。
+3. Toast 提示「直连模式已解锁」；关闭「关于」后，配对页底部出现
+   「直连模式（高级，仅内网直连裸 dsh 或未部署认证网关时使用）」；点击标题展开输入区。
+4. 再连点版本号 7 次会 Toast「直连模式已锁定」，直连区域从配对页消失。
+
+解锁状态保存在独立的 SharedPreferences，**清除配对数据/「忘记此设备」不会重置**；
+只有系统「清除数据」或卸载才恢复默认隐藏。公网/不可信网络必须使用扫码配对（严格证书 pin），
+不要把直连模式当作认证网关的替代方案。
+
+如果服务端没有安装 `dsh-auth-gate`，解锁后仍可使用 v0.3.0 以来的直连模式：
 
 1. 在 `dsh` 启动日志/管理方式中取得 Web GUI 入口地址，形如
    `https://<host>:3080/?token=<token>`。
@@ -530,11 +562,12 @@ v0.4.1 起不再有“再按一次返回退出”，退出请用菜单里的「�
 | 退出当前会话 | 通过 `POST /__auth/logout` 让服务端删除 session，清 session cookie，回到登录页；**保留** deviceToken 与设备绑定 cookie | 否（下次冷启动自动登录） |
 | 忘记此设备（重新配对） | 二次确认后删除本机 deviceToken、该 host 全部 WebView cookie（含设备绑定）与配对 profile，回到配对页 | **是**（下次必须重新扫码，见 §7） |
 | 诊断日志 | 打开内存诊断日志，可一键复制 | 否 |
-| 关于 | 显示 App 名称、versionName、包名、Android 版本、当前服务器地址、设备有效期 | 否 |
+| 关于 | 显示 App 名称、versionName、包名、Android 版本、当前服务器地址、设备有效期；版本号连点 7 次可解锁/锁定直连模式 | 否 |
 | 退出应用 | 结束当前任务栈（`finishAffinity()`），不卸载、不清数据 | 否 |
 
 直连模式（无认证网关）：刷新 / 重新配对 / 诊断日志 / 关于 / 退出应用；其中「重新配对」
 清 WebView cookie（含设备绑定）、本地配对 profile 和当前设备令牌，回到配对页。
+直连模式的输入区在 v0.4.3 起默认隐藏，需先在「关于」里连点版本号 7 次解锁（见 §4.7）。
 
 说明：
 
@@ -545,6 +578,8 @@ v0.4.1 起不再有“再按一次返回退出”，退出请用菜单里的「�
 - 如果退出会话请求失败/超时（约 4 秒兜底），App 会尽量清理本地 session 并回登录页；
   若页面仍异常，可用「刷新」或「忘记此设备」。
 - 「退出应用」只结束界面，后台/系统仍可能保留进程；再次打开会重新加载。
+- 「关于」里的版本号是直连模式的隐藏解锁入口：连点 7 次解锁、再连点 7 次锁定；
+  状态保存在独立的 SharedPreferences，清除配对数据不会重置。
 
 ### 5.4 麦克风（语音输入）
 
@@ -917,7 +952,8 @@ adb shell pm clear ai.deepseek.dsh.mobile
 
 | 现象 | 可能原因 | 处理 |
 | --- | --- | --- |
-| 点「扫码配对」没反应/直接退出 | 相机权限被拒；相机被其他应用占用；无相机 | 系统设置授予相机权限；关闭占用相机的应用；无相机改用直连模式 |
+| 点「扫码配对」没反应/直接退出 | 相机权限被拒；相机被其他应用占用；无相机 | 系统设置授予相机权限；关闭占用相机的应用；无相机改用「从相册选择二维码」；仍不可用时用 §4.7 的隐藏直连模式（需先解锁） |
+| 「从相册选择二维码」提示未能识别 | 图片中没有二维码；使用转发压缩图/截图过于模糊；不是本网关的配对二维码 | 用管理页原图截图重试（勿用转发压缩图）；确认二维码未过期；仍失败改用扫码或 §4.7 |
 | 扫码一直识别不了 | 二维码太小/反光/屏幕亮度低；不是 QR；二维码已离开页面 | 调整距离/亮度；重新生成；确认是管理页的配对二维码 |
 | 提示「配对失败」，无详情 | 二维码不是合法的 `/__auth/pair` 载荷（被系统相机/微信打开过、复制时截断、版本不对） | 重新用管理页生成，直接用 App 内扫码 |
 | `HTTP 401 · invalid_ticket` | ticket 无效（二维码不完整/不属于该网关/已被使用） | 重新生成二维码；确认扫码的地址与当前服务器一致 |
@@ -1020,7 +1056,7 @@ App 内：
 - 来源包括 WebView console、JS 桥、TLS pin、下载等；
 - 写入时会对 URL 中的 `token=` 参数做 `<REDACTED>` 脱敏；
 - **不会自动附带** App 版本、设备型号、服务端版本；请在反馈时另附「关于」里的
-  versionName（`0.4.2`）和 Android 版本；
+  versionName（`0.4.3`）和 Android 版本；
 - 日志可能仍包含服务器地址、页面片段、错误堆栈；发送前请自行检查，
   **不要**附带密码、TOTP、deviceToken、Cookie、配对二维码或截图。
 
@@ -1084,9 +1120,24 @@ adb logcat -s DSHMobile DSHAuthGate DSHQrScan DSHDeviceToken
 
 | 版本 | versionCode | APK | SHA-256 | 签名证书 SHA-256 |
 | --- | --- | --- | --- | --- |
-| v0.4.2（当前） | 9 | `DSH-Mobile-v0.4.2-release.apk` | `1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495` | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
+| v0.4.3（当前） | 10 | `DSH-Mobile-v0.4.3-release.apk` | `35cfdfbae6c97b1bbb1821f36b55b459246c784fffafa23da84153091ddf0304` | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
+| v0.4.2 | 9 | `DSH-Mobile-v0.4.2-release.apk` | `1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495` | 同上 |
 | v0.4.1 | 8 | `DSH-Mobile-v0.4.1-release.apk` | `a9ad7979c1487e31b0c55ba374c39aed6e3f5b5990c3421ebf38748838848e80` | 同上 |
 | v0.4.0 | 7 | `DSH-Mobile-v0.4.0-release.apk` | `5d19e16e9445fc54e94f82ba1e89f356ceed03df71c7dbc726847b16c35552c5` | 同上 |
+
+v0.4.2 → v0.4.3 的主要变化：
+
+- 配对页新增「从相册选择二维码」：系统照片选择器（低版本回退文件选择器）选图，ML Kit 离线识别，
+  **不需要相机/存储权限**；识别结果复用扫码链路的严格 `QrPairPayload` 校验 → 「确认配对」→ 兑换，
+  失败提示「未能从图片中识别配对二维码，请使用原图截图（勿用转发压缩图）重试」。
+- 直连模式（地址 + token）**默认隐藏**：配对页只显示「扫码配对」「从相册选择二维码」，说明文案改为
+  「请让服务端管理页生成配对二维码后扫码」；在「关于」里连续点击版本号 7 次（相邻间隔 ≤2 秒）
+  解锁，配对页出现可展开的「直连模式（高级，仅内网直连裸 dsh 或未部署认证网关时使用）」区域，
+  再连点 7 次锁定。连接逻辑、fail-open TLS 语义不变。
+- 解锁状态保存到独立的 `dsh_mobile_ui_prefs`（`direct_mode_unlocked`），清除配对数据/「忘记此设备」
+  不会重置；无新增权限、无新增第三方依赖（复用已有 CameraX/ML Kit）。
+- 扫码配对、认证网关、证书 pin、启动静默登录/前台续期、返回手势菜单与 v0.4.2 一致。
+- 版本号 `0.4.3` / versionCode `10`。
 
 v0.4.1 → v0.4.2 的主要变化：
 
@@ -1110,17 +1161,18 @@ v0.4.0 → v0.4.1 的主要变化：
 
 ### 10.2 覆盖升级
 
-同签名（官方 v0.4.1 → v0.4.2，或 v0.4.0 → v0.4.2）：
+同签名（官方 v0.4.2 → v0.4.3，或更早的 v0.4.x → v0.4.3）：
 
 1. 下载并校验新 APK（§2.2）。
 2. 点击安装，系统显示「更新」；或：
 
    ```bash
-   adb install -r DSH-Mobile-v0.4.2-release.apk
+   adb install -r DSH-Mobile-v0.4.3-release.apk
    ```
 
 3. 数据保留：服务器地址、pin、加密 deviceToken、WebView Cookie 均保留；升级后无需重新配对。
-4. 打开 App →「关于」确认版本为 `0.4.2`；已登录过的网关设备应静默进入 GUI，再试一次返回手势菜单。
+4. 打开 App →「关于」确认版本为 `0.4.3`；已登录过的网关设备应静默进入 GUI，再试一次返回手势菜单。
+5. 直连模式若解锁过会继续显示；配对页默认只保留扫码/相册两个入口。
 
 ### 10.3 回滚到旧版本
 
@@ -1131,7 +1183,8 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 ```
 
 - `-d` 允许 versionCode 降低；仍需签名一致。
-- 一般保留数据；v0.4.0/v0.4.1/v0.4.2 的配对数据结构兼容（v0.4.2 只新增非敏感的可选标记）。
+- 一般保留数据；v0.4.0–v0.4.3 的配对数据结构兼容（v0.4.2 只新增非敏感的可选标记；
+  v0.4.3 的直连解锁标记保存在独立 UI SharedPreferences，不属于配对数据）。
 - 部分厂商系统/安装器可能仍拒绝降级；此时只能卸载后安装（会清数据，需重新配对）。
 - 回滚前建议确认新版本问题是否与 App 有关（也可能是服务端/网络），并记录配对信息。
 
@@ -1139,7 +1192,10 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 
 ### 10.4 升级后检查
 
-- [ ] 「关于」显示 `0.4.2`；认证网关模式还会显示「设备有效期至：…」或「—」。
+- [ ] 「关于」显示 `0.4.3`；认证网关模式还会显示「设备有效期至：…」或「—」。
+- [ ] 配对页默认只有「扫码配对」「从相册选择二维码」；「关于」连点版本号 7 次后出现可展开直连区域，
+      再连点 7 次消失（Toast 分别提示「直连模式已解锁」「直连模式已锁定」）。
+- [ ] 「从相册选择二维码」选原图截图可完成配对；选无二维码图片只 Toast 失败提示，不崩溃。
 - [ ] 打开后直接进入 GUI，未要求重新配对/登录（同签名覆盖正常；首次配对设备除外）。
 - [ ] 返回手势/返回键能弹出菜单（无悬浮 ⋮）。
 - [ ] 认证网关模式菜单包含「退出当前会话」「忘记此设备（重新配对）」；
@@ -1290,9 +1346,10 @@ sha256sum app/build/outputs/apk/release/app-release.apk
 
 ## 文档核对说明
 
-- 本文按 DSH Mobile v0.4.2 源码（`MainActivity`、`WebHost`、`AuthGateClient`、`CertPin`、
+- 本文按 DSH Mobile v0.4.3 源码（`MainActivity`、`WebHost`、`AuthGateClient`、`CertPin`、
   `DeviceTokenStore`、`QrPairPayload`、`QrScanActivity`、`SessionStore`、`Downloader`、
-  `Diagnostics`）与 `dsh-auth-gate` v0.6.2 源码/README 核对。
+  `Diagnostics`）与 `dsh-auth-gate` v0.6.2 源码/README 核对。v0.4.3 的相册二维码解码与
+  直连模式隐藏入口均在 `MainActivity` 内实现（未新增 Activity 与依赖）。
 - APK 的 SHA-256、签名证书、versionCode 与 ABI 已在构建机用 `sha256sum`、`apksigner`、
   `aapt2` 核对；真机上的权限弹窗、厂商设置路径和返回手势行为可能因 Android 版本/OEM 不同，
   请按实际界面操作。

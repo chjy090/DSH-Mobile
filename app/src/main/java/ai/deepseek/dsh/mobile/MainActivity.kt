@@ -1,21 +1,27 @@
 package ai.deepseek.dsh.mobile
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.text.TextUtils
 import android.util.Log
@@ -37,14 +43,22 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.google.mlkit.vision.barcode.BarcodeScanner
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.Future
 
 /**
@@ -53,6 +67,8 @@ import java.util.concurrent.Future
  * v0.4.1 起不再有悬浮 ⋮ 按钮：从屏幕边缘内滑（系统返回手势）或三键导航返回键，
  * 在根页面弹出「应用菜单」AlertDialog。v0.4.2 起认证网关模式支持启动静默登录、
  * 前台恢复自动续期，并把菜单拆成「退出当前会话」与「忘记此设备（重新配对）」。
+ * v0.4.3 起配对页新增「从相册选择二维码」；直连模式（地址 + token）默认隐藏，
+ * 在「关于」里连续点击版本号 7 次解锁/锁定（状态存独立 SharedPreferences）。
  */
 class MainActivity : ComponentActivity() {
 
@@ -63,6 +79,26 @@ class MainActivity : ComponentActivity() {
 
     /** v0.4.0 扫码配对：QrScanActivity 结果（RESULT_OK 时携带 QrPairPayload）。 */
     private lateinit var qrScanLauncher: ActivityResultLauncher<Intent>
+
+    /**
+     * v0.4.3 相册二维码：`PickVisualMedia` 在 Android 13+ 用系统照片选择器，
+     * 低版本/无照片选择器时由 androidx 回退成 `ACTION_OPEN_DOCUMENT`（image 类型），
+     * 两条路径都不需要存储权限。
+     */
+    private lateinit var qrGalleryLauncher: ActivityResultLauncher<PickVisualMediaRequest>
+
+    /**
+     * v0.4.3 相册二维码解码状态。
+     *
+     * 解码全部在 [galleryDecodeExecutor] 后台线程完成（读图/降采样/EXIF），ML Kit 识别是异步
+     * Task；[galleryDecodeToken] 在 Activity 销毁、新的选图或超时后自增，迟到的解码/识别
+     * 回调用它作废旧请求，避免向已销毁的 Activity 弹 Toast/对话框。
+     */
+    private var galleryDecodeExecutor: ExecutorService? = null
+    private var galleryScanner: BarcodeScanner? = null
+    private var galleryDecodeToken = 0
+    private var galleryDecodeWatchdog: Runnable? = null
+    private var galleryDecodeInFlight = false
 
     /** 认证网关原生网络客户端（redeem / renew）。 */
     private val authGateClient by lazy { AuthGateClient() }
@@ -176,6 +212,10 @@ class MainActivity : ComponentActivity() {
     /** 首次使用提示是否已排队，避免一次启动里重复 post Toast。 */
     private var backGestureHintPending = false
 
+    /** v0.4.3：「关于」版本号连续点击计数与上次点击时间（elapsedRealtime）。 */
+    private var versionTapCount = 0
+    private var lastVersionTapAt = 0L
+
     private val session: SessionStore by lazy { SessionStore(this) }
 
     private val matchParent = ViewGroup.LayoutParams.MATCH_PARENT
@@ -241,6 +281,13 @@ class MainActivity : ComponentActivity() {
             onScanResult(result.resultCode, result.data)
         }
 
+        // v0.4.3 相册二维码：用户取消时 uri 为 null（静默返回配对页）。
+        qrGalleryLauncher = registerForActivityResult(
+            ActivityResultContracts.PickVisualMedia()
+        ) { uri ->
+            onGalleryImagePicked(uri)
+        }
+
         root = FrameLayout(this)
         root.setBackgroundColor(color(R.color.dsh_bg))
         setContentView(root)
@@ -287,17 +334,56 @@ class MainActivity : ComponentActivity() {
         form.addView(title, formParams(0))
 
         val message = TextView(this)
-        message.setText(R.string.pairing_message)
+        message.setText(R.string.pairing_message_scan)
         message.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         message.setTextColor(color(R.color.dsh_text_secondary))
         message.gravity = Gravity.CENTER
         message.setLineSpacing(0f, 1.2f)
         form.addView(message, formParams(12))
 
-        // v0.4.0：认证网关优先扫码配对；手动输入（旧直连 dsh 模式）保留在下方。
+        // v0.4.0：认证网关扫码配对（推荐）。
         val scan = makeButton(R.string.pair_scan, primary = true)
         scan.setOnClickListener { startQrScan() }
         form.addView(scan, formParams(20))
+
+        // v0.4.3：从相册图片识别配对二维码，供相机不可用/二维码已在相册（截图）时使用。
+        val gallery = makeButton(R.string.pair_gallery, primary = false)
+        gallery.setOnClickListener { startQrGalleryPick() }
+        form.addView(gallery, formParams(12))
+
+        // v0.4.3：直连模式（地址 + token）默认隐藏；「关于」里连点版本号 7 次解锁后出现。
+        // 未解锁时配对页只有扫码/相册两个入口，避免普通用户误用 fail-open 直连。
+        if (directModeUnlocked()) {
+            addDirectModeSection(form)
+        }
+    }
+
+    /**
+     * v0.4.3 直连模式（高级，默认隐藏）区域：标题可点击展开/收起，展开后是
+     * URL / Token / 连接控件；连接逻辑继续调用 [attemptPair]，与 v0.4.2 一致。
+     */
+    private fun addDirectModeSection(form: LinearLayout) {
+        val toggle = TextView(this)
+        toggle.text = directModeToggleText(expanded = false)
+        toggle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        toggle.setTextColor(color(R.color.dsh_text_secondary))
+        toggle.gravity = Gravity.CENTER
+        toggle.setLineSpacing(0f, 1.2f)
+        toggle.setPadding(dp(8), dp(12), dp(8), dp(12))
+        toggle.isClickable = true
+        toggle.isFocusable = true
+        form.addView(toggle, formParams(28))
+
+        val panel = LinearLayout(this)
+        panel.orientation = LinearLayout.VERTICAL
+        panel.visibility = View.GONE
+
+        val hint = TextView(this)
+        hint.setText(R.string.direct_mode_hint)
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        hint.setTextColor(color(R.color.dsh_text_secondary))
+        hint.setLineSpacing(0f, 1.2f)
+        panel.addView(hint, formParams(0))
 
         val urlInput = EditText(this)
         urlInput.hint = getString(R.string.pairing_url_hint)
@@ -306,21 +392,21 @@ class MainActivity : ComponentActivity() {
         urlInput.isSingleLine = true
         urlInput.setText(session.serverUrl.orEmpty())
         urlInput.setSelection(urlInput.text?.length ?: 0)
-        form.addView(urlInput, formParams(24))
+        panel.addView(urlInput, formParams(16))
 
         val httpsHint = TextView(this)
         httpsHint.setText(R.string.pairing_https_hint)
         httpsHint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         httpsHint.setTextColor(color(R.color.dsh_text_secondary))
         httpsHint.setLineSpacing(0f, 1.2f)
-        form.addView(httpsHint, formParams(8))
+        panel.addView(httpsHint, formParams(8))
 
         val tokenInput = EditText(this)
         tokenInput.hint = getString(R.string.pairing_token_hint)
         tokenInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         tokenInput.imeOptions = EditorInfo.IME_ACTION_DONE
         tokenInput.isSingleLine = true
-        form.addView(tokenInput, formParams(12))
+        panel.addView(tokenInput, formParams(12))
 
         val connect = makeButton(R.string.btn_connect, primary = false)
         connect.setOnClickListener {
@@ -329,7 +415,7 @@ class MainActivity : ComponentActivity() {
                 tokenInput.text?.toString().orEmpty()
             )
         }
-        form.addView(connect, formParams(24))
+        panel.addView(connect, formParams(24))
 
         tokenInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
@@ -341,6 +427,41 @@ class MainActivity : ComponentActivity() {
             } else {
                 false
             }
+        }
+
+        form.addView(panel, LinearLayout.LayoutParams(matchParent, wrapContent))
+
+        toggle.setOnClickListener {
+            val expanded = panel.visibility != View.VISIBLE
+            panel.visibility = if (expanded) View.VISIBLE else View.GONE
+            toggle.text = directModeToggleText(expanded)
+        }
+    }
+
+    /** 直连模式标题文案（用箭头提示可展开/收起）。 */
+    private fun directModeToggleText(expanded: Boolean): String {
+        val arrow = if (expanded) "▾ " else "▸ "
+        return arrow + getString(R.string.direct_mode_title)
+    }
+
+    /** v0.4.3：直连模式解锁状态（独立 SharedPreferences，清配对数据不会重置）。 */
+    private fun directModeUnlocked(): Boolean = try {
+        getSharedPreferences(AppConfig.PREFS_UI, Context.MODE_PRIVATE)
+            .getBoolean(AppConfig.KEY_DIRECT_MODE_UNLOCKED, false)
+    } catch (t: Throwable) {
+        Log.w(TAG, "read direct mode unlock flag failed", t)
+        false
+    }
+
+    /** 写入直连模式解锁标记；失败只记日志（本进程内仍按调用方状态提示）。 */
+    private fun setDirectModeUnlocked(unlocked: Boolean) {
+        try {
+            getSharedPreferences(AppConfig.PREFS_UI, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(AppConfig.KEY_DIRECT_MODE_UNLOCKED, unlocked)
+                .apply()
+        } catch (t: Throwable) {
+            Log.w(TAG, "persist direct mode unlock flag failed", t)
         }
     }
 
@@ -388,6 +509,274 @@ class MainActivity : ComponentActivity() {
         if (direct != null) return direct
         // 兜底：极端情况下只有原始文本，重新走一遍严格解析。
         return QrPairPayload.parse(data.getStringExtra(QrScanActivity.EXTRA_RAW_PAYLOAD))
+    }
+
+    // ---------------------------------------------------------- 相册二维码（v0.4.3）
+
+    /** 打开系统照片选择器/文件选择器（不申请存储权限；取消时回调 uri = null）。 */
+    private fun startQrGalleryPick() {
+        if (galleryDecodeInFlight) return
+        try {
+            qrGalleryLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        } catch (t: Throwable) {
+            Log.e(TAG, "launch gallery picker failed", t)
+            Toast.makeText(this, R.string.pair_gallery_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * 相册选图结果：后台线程读图/降采样/EXIF 转正，再交给 ML Kit bundled barcode 识别。
+     *
+     * 安全性：图片来自任意相册，识别结果仍必须通过 [QrPairPayload.parse] 严格校验
+     * （只接受 https + `/__auth/pair` + 合法 fp/v=1），与扫码链路完全一致，
+     * 成功后同样进入 [showPairConfirm] 确认再兑换。
+     */
+    private fun onGalleryImagePicked(uri: Uri?) {
+        // 用户取消：静默回配对页。
+        if (uri == null) return
+        if (isFinishing || isDestroyed) return
+        if (galleryDecodeInFlight) return
+
+        val scanner = ensureGalleryScanner()
+        val executor = ensureGalleryDecodeExecutor()
+        if (scanner == null || executor == null) {
+            Toast.makeText(this, R.string.pair_gallery_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+
+        galleryDecodeInFlight = true
+        val token = ++galleryDecodeToken
+
+        // 兜底：解码/识别异常卡住时解除“正在识别”状态并提示，避免入口永久失效。
+        val watchdog = Runnable {
+            if (token != galleryDecodeToken) return@Runnable
+            galleryDecodeToken++
+            galleryDecodeWatchdog = null
+            galleryDecodeInFlight = false
+            Log.w(TAG, "gallery qr decode timed out")
+            Toast.makeText(this, R.string.pair_gallery_failed, Toast.LENGTH_LONG).show()
+        }
+        galleryDecodeWatchdog = watchdog
+        mainHandler.postDelayed(watchdog, GALLERY_DECODE_TIMEOUT_MS)
+
+        try {
+            executor.execute {
+                val image = try {
+                    loadGalleryInputImage(applicationContext, uri)
+                } catch (t: Throwable) {
+                    // 含 OutOfMemoryError/损坏图片：只记异常类型，不记录图片内容。
+                    Log.w(TAG, "load gallery image failed: ${t.javaClass.simpleName}")
+                    null
+                }
+                mainHandler.post {
+                    if (token != galleryDecodeToken) return@post
+                    if (isFinishing || isDestroyed) return@post
+                    if (image == null) {
+                        finishGalleryDecode(token, null)
+                        return@post
+                    }
+                    try {
+                        // ML Kit 的 Task 回调默认在主线程；finishGalleryDecode 只做 UI 操作。
+                        scanner.process(image)
+                            .addOnSuccessListener { barcodes ->
+                                finishGalleryDecode(token, firstPairingPayload(barcodes))
+                            }
+                            .addOnFailureListener { error ->
+                                Log.w(
+                                    TAG,
+                                    "gallery barcode process failed: " +
+                                        error.javaClass.simpleName
+                                )
+                                finishGalleryDecode(token, null)
+                            }
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "gallery barcode process failed", t)
+                        finishGalleryDecode(token, null)
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "submit gallery decode failed", t)
+            galleryDecodeToken++
+            galleryDecodeWatchdog?.let { mainHandler.removeCallbacks(it) }
+            galleryDecodeWatchdog = null
+            galleryDecodeInFlight = false
+            Toast.makeText(this, R.string.pair_gallery_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * 收尾一次相册识别（主线程）：[token] 与当前代际不一致说明 Activity 已销毁、
+     * 已超时或已被新的选图替代，直接丢弃结果，不做任何 UI 操作。
+     */
+    private fun finishGalleryDecode(token: Int, payload: QrPairPayload?) {
+        if (token != galleryDecodeToken) return
+        galleryDecodeWatchdog?.let { mainHandler.removeCallbacks(it) }
+        galleryDecodeWatchdog = null
+        galleryDecodeInFlight = false
+        if (isFinishing || isDestroyed) return
+        if (payload == null) {
+            Log.w(TAG, "gallery qr rejected: no valid pairing payload in image")
+            Toast.makeText(this, R.string.pair_gallery_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        showPairConfirm(payload)
+    }
+
+    /** 一张图可能有多个码：取第一个通过严格校验的（其余忽略）。 */
+    private fun firstPairingPayload(barcodes: List<Barcode>): QrPairPayload? {
+        for (barcode in barcodes) {
+            val raw = barcode.rawValue ?: continue
+            val payload = QrPairPayload.parse(raw) ?: continue
+            return payload
+        }
+        return null
+    }
+
+    private fun ensureGalleryScanner(): BarcodeScanner? {
+        galleryScanner?.let { return it }
+        return try {
+            BarcodeScanning.getClient(
+                BarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                    .build()
+            ).also { galleryScanner = it }
+        } catch (t: Throwable) {
+            Log.e(TAG, "init gallery barcode scanner failed", t)
+            null
+        }
+    }
+
+    private fun ensureGalleryDecodeExecutor(): ExecutorService? {
+        galleryDecodeExecutor?.let { return it }
+        return try {
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "dsh-gallery-qr").apply { isDaemon = true }
+            }.also { galleryDecodeExecutor = it }
+        } catch (t: Throwable) {
+            Log.e(TAG, "init gallery decode executor failed", t)
+            null
+        }
+    }
+
+    /**
+     * 读取相册图片为 [InputImage]（后台线程调用）。
+     *
+     * - 先 bounds 解码算 `inSampleSize`，把最长边压到 [GALLERY_MAX_IMAGE_SIDE] 以内，
+     *   避免 48MP 原图直接解码 OOM；
+     * - 按 EXIF 方向把像素转正后再交给 ML Kit（截图通常无旋转，相机照片需要）；
+     * - 任何异常都返回 null，由调用方提示「未能识别」，不崩溃。
+     */
+    private fun loadGalleryInputImage(context: Context, uri: Uri): InputImage? {
+        val resolver = context.contentResolver
+
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        try {
+            resolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, bounds)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "read gallery image bounds failed: ${t.javaClass.simpleName}")
+        }
+
+        var sampleSize = 1
+        if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+            val longestSide = maxOf(bounds.outWidth, bounds.outHeight)
+            while (longestSide / sampleSize > GALLERY_MAX_IMAGE_SIDE) {
+                sampleSize *= 2
+            }
+        }
+
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        val decoded = try {
+            resolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, options)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "decode gallery image failed: ${t.javaClass.simpleName}")
+            null
+        }
+        if (decoded == null) {
+            Log.w(TAG, "gallery image decode returned null")
+            return null
+        }
+
+        val rotation = readGalleryRotation(resolver, uri)
+        val upright = if (rotation == 0) {
+            decoded
+        } else {
+            try {
+                Bitmap.createBitmap(
+                    decoded,
+                    0,
+                    0,
+                    decoded.width,
+                    decoded.height,
+                    Matrix().apply { postRotate(rotation.toFloat()) },
+                    true
+                ).also { rotated ->
+                    if (rotated !== decoded) decoded.recycle()
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "rotate gallery image failed: ${t.javaClass.simpleName}")
+                decoded
+            }
+        }
+        return InputImage.fromBitmap(upright, 0)
+    }
+
+    /**
+     * 读 EXIF 方向（仅处理 90/180/270 旋转；镜像翻转对二维码识别无影响，忽略）。
+     *
+     * 用平台 `android.media.ExifInterface` 而不是 androidx 版本：只为读一个方向值，
+     * 不引入新依赖；输入是用户主动选择的本地相册图片，不解析远端/不可信来源的图片。
+     */
+    @SuppressLint("ExifInterface")
+    private fun readGalleryRotation(resolver: ContentResolver, uri: Uri): Int {
+        return try {
+            resolver.openInputStream(uri)?.use { stream ->
+                val exif = android.media.ExifInterface(stream)
+                when (
+                    exif.getAttributeInt(
+                        android.media.ExifInterface.TAG_ORIENTATION,
+                        android.media.ExifInterface.ORIENTATION_NORMAL
+                    )
+                ) {
+                    android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                    android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                    android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                    else -> 0
+                }
+            } ?: 0
+        } catch (t: Throwable) {
+            Log.w(TAG, "read gallery exif orientation failed: ${t.javaClass.simpleName}")
+            0
+        }
+    }
+
+    /** 清空相册识别状态/资源（Activity 销毁时；迟到回调由 [galleryDecodeToken] 丢弃）。 */
+    private fun releaseGalleryResources() {
+        galleryDecodeToken++
+        galleryDecodeWatchdog?.let { mainHandler.removeCallbacks(it) }
+        galleryDecodeWatchdog = null
+        galleryDecodeInFlight = false
+        try {
+            galleryScanner?.close()
+        } catch (t: Throwable) {
+            Log.w(TAG, "close gallery barcode scanner failed", t)
+        }
+        galleryScanner = null
+        try {
+            galleryDecodeExecutor?.shutdownNow()
+        } catch (t: Throwable) {
+            Log.w(TAG, "shutdown gallery decode executor failed", t)
+        }
+        galleryDecodeExecutor = null
     }
 
     /** 配对确认页：服务器地址 + 证书 SHA-256 + “此设备首次配对”说明。 */
@@ -1770,15 +2159,25 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun showAbout() {
         val versionName = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.2"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.3"
         } catch (t: Throwable) {
-            "0.4.2"
+            "0.4.3"
         }
-        val message = buildString {
-            append(getString(R.string.app_name))
-            append(' ')
-            append(versionName)
-            append('\n')
+
+        // v0.4.3：版本号 TextView 是「直连模式」隐藏入口（连续点击 7 次解锁/锁定）；
+        // 其余信息仍与原「关于」一致，放在下方可选中复制。
+        val versionView = TextView(this).apply {
+            text = getString(R.string.about_version_line, getString(R.string.app_name), versionName)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(color(R.color.dsh_text))
+            setTypeface(Typeface.DEFAULT_BOLD)
+            setPadding(dp(24), dp(20), dp(24), dp(8))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onVersionTapped() }
+        }
+
+        val details = buildString {
             append(packageName)
             append("\nAndroid ")
             append(Build.VERSION.RELEASE)
@@ -1798,11 +2197,65 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.menu_about)
-            .setMessage(message)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
+
+        val detailsView = TextView(this).apply {
+            text = details
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(color(R.color.dsh_text))
+            setPadding(dp(24), 0, dp(24), dp(16))
+            setLineSpacing(0f, 1.2f)
+            setTextIsSelectable(true)
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(versionView, LinearLayout.LayoutParams(matchParent, wrapContent))
+            addView(detailsView, LinearLayout.LayoutParams(matchParent, wrapContent))
+        }
+        val scroll = ScrollView(this).apply {
+            addView(content, ViewGroup.LayoutParams(matchParent, wrapContent))
+        }
+
+        try {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.menu_about)
+                .setView(scroll)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        } catch (t: Throwable) {
+            Log.w(TAG, "show about dialog failed", t)
+        }
+    }
+
+    /**
+     * v0.4.3：「关于」版本号连点 [DIRECT_MODE_TAP_COUNT] 次（相邻两次间隔不超过
+     * [DIRECT_MODE_TAP_WINDOW_MS]）切换直连模式解锁状态；解锁/锁定都 Toast 提示。
+     */
+    private fun onVersionTapped() {
+        val now = SystemClock.elapsedRealtime()
+        if (versionTapCount > 0 && now - lastVersionTapAt > DIRECT_MODE_TAP_WINDOW_MS) {
+            versionTapCount = 0
+        }
+        lastVersionTapAt = now
+        versionTapCount++
+        if (versionTapCount < DIRECT_MODE_TAP_COUNT) return
+
+        versionTapCount = 0
+        lastVersionTapAt = 0L
+        val unlocked = !directModeUnlocked()
+        setDirectModeUnlocked(unlocked)
+        Toast.makeText(
+            this,
+            if (unlocked) R.string.direct_mode_unlocked else R.string.direct_mode_locked,
+            Toast.LENGTH_SHORT
+        ).show()
+        val state = if (unlocked) "unlocked" else "locked"
+        Log.i(TAG, "direct mode $state via about version taps")
+        // 配对页就在「关于」下面：立即重建，让直连区域出现/消失。
+        // 已配对（WebView 主界面）时不重建，避免打断当前页面，下次进配对页再读标记。
+        if (!session.hasPairing) {
+            showPairing()
+        }
     }
 
     /** 设备有效期展示（yyyy-MM-dd HH:mm）；0/非法值显示「—」。不涉及 token。 */
@@ -2159,6 +2612,8 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         pinProbePassedBase = null
         redeemInFlight = false
+        // v0.4.3：作废相册识别回调并释放 ML Kit scanner/解码线程。
+        releaseGalleryResources()
         // v0.4.2：退出 Activity 后丢弃所有 renew 回调（HTTP 连接由 15s 超时自行结束）。
         authRenewGeneration++
         cancelAuthRenewIo()
@@ -2268,6 +2723,16 @@ class MainActivity : ComponentActivity() {
         const val LOGOUT_FALLBACK_MS = 4000L
 
         const val MAX_DEVICE_NAME_LENGTH = 64
+
+        /** v0.4.3：相册图片最长边上限（超过则按 2 的幂降采样，避免原图 OOM）。 */
+        const val GALLERY_MAX_IMAGE_SIDE = 3072
+
+        /** v0.4.3：相册识别兜底超时（ms）；超时后解除进行中状态，可再次选图。 */
+        const val GALLERY_DECODE_TIMEOUT_MS = 20_000L
+
+        /** v0.4.3：直连模式解锁——连续点击版本号次数与相邻点击最大间隔（ms）。 */
+        const val DIRECT_MODE_TAP_COUNT = 7
+        const val DIRECT_MODE_TAP_WINDOW_MS = 2_000L
 
         /** 首次「返回手势打开应用菜单」提示的 SharedPreferences 键与延迟（ms）。 */
         const val KEY_BACK_GESTURE_HINT = "back_gesture_menu_hint_v1"

@@ -2,15 +2,23 @@
 <resources>
     <string name="app_name">DSH Mobile</string>
 
-    <!-- 配对 -->
+    <!-- 配对（v0.4.3：默认只保留扫码/相册，直连模式隐藏） -->
     <string name="pairing_title">连接 DSH Host</string>
-    <string name="pairing_message">输入 dsh Web GUI 地址；推荐 HTTPS（https://192.0.2.10:3080），语音输入需要安全上下文。可直接粘贴带 token 的完整链接。</string>
+    <string name="pairing_message_scan">请让服务端管理页生成配对二维码后扫码</string>
     <string name="pairing_url_hint">https://192.0.2.10:3080</string>
     <string name="pairing_https_hint">语音输入/安全上下文需要 HTTPS 地址：https://&lt;主机&gt;:3080（dsh 已改原生 HTTPS，http 地址不可用）。</string>
     <string name="pairing_token_hint">Token（可选，留空则使用已有会话）</string>
     <string name="btn_connect">连接</string>
     <string name="btn_retry">重试</string>
     <string name="btn_pair_again">重新配对</string>
+
+    <!-- 直连模式隐藏入口（v0.4.3） -->
+    <string name="pair_gallery">从相册选择二维码</string>
+    <string name="pair_gallery_failed">未能从图片中识别配对二维码，请使用原图截图（勿用转发压缩图）重试</string>
+    <string name="direct_mode_title">直连模式（高级，仅内网直连裸 dsh 或未部署认证网关时使用）</string>
+    <string name="direct_mode_hint">直连模式不校验证书指纹：请填写服务器地址与访问令牌，仅建议在内网使用；公网请使用扫码配对。</string>
+    <string name="direct_mode_unlocked">直连模式已解锁</string>
+    <string name="direct_mode_locked">直连模式已锁定</string>
 
     <!-- 认证网关扫码配对（v0.4.0） -->
     <string name="pair_scan">扫码配对</string>
@@ -32,6 +40,7 @@
     <string name="auth_device_origin_changed">服务器地址已变更，设备配对已失效，需要重新扫码配对（点击此处重新配对）</string>
     <string name="auth_renew_failed_network">自动登录失败：网络或 TLS 连接异常，点击重试</string>
     <string name="auth_renew_login_required">自动续期失败，请重新登录</string>
+    <string name="about_version_line">%1$s %2$s</string>
     <string name="about_device_expires">设备有效期至：%1$s</string>
     <string name="value_unknown">—</string>
 

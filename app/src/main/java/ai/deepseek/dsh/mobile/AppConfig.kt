@@ -15,6 +15,18 @@ object AppConfig {
     const val KEY_SERVER_URL = "server_url"
     const val KEY_TOKEN = "token"
 
+    /**
+     * v0.4.3：界面偏好（与配对状态分开存），避免「忘记此设备」/重新配对时
+     * [SessionStore.clear] 清空 `dsh_mobile_prefs` 顺带把直连模式解锁状态重置。
+     */
+    const val PREFS_UI = "dsh_mobile_ui_prefs"
+
+    /**
+     * v0.4.3：直连模式（服务器地址 + token）解锁标记。
+     * 配对页默认只显示扫码/相册入口；在「关于」里连续点击版本号 7 次切换此标记。
+     */
+    const val KEY_DIRECT_MODE_UNLOCKED = "direct_mode_unlocked"
+
     /** v0.4.0 认证网关：扫码取得的网关证书 SHA-256（64 位小写 hex）。 */
     const val KEY_PINNED_CERT = "pinned_cert_sha256"
 
