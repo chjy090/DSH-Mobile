@@ -11,7 +11,6 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -31,7 +30,6 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
@@ -41,9 +39,16 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 /**
- * 唯一 Activity：配对视图 / WebView 主界面 / 原生错误覆盖层 / 返回键 / 菜单。
+ * 唯一 Activity：配对视图 / WebView 主界面 / 原生错误覆盖层 / 返回手势（应用菜单）。
+ *
+ * v0.4.1 起不再有悬浮 ⋮ 按钮：从屏幕边缘内滑（系统返回手势）或三键导航返回键，
+ * 在根页面弹出「应用菜单」AlertDialog；菜单包含刷新、重新配对、登出（网关模式）、
+ * 诊断日志、关于、退出应用。
  */
 class MainActivity : ComponentActivity() {
 
@@ -93,7 +98,7 @@ class MainActivity : ComponentActivity() {
     private var progressBar: ProgressBar? = null
     private var errorOverlay: View? = null
 
-    /** 页面顶部 TLS / 明文 HTTP 警告条（位于 ⋮ 菜单按钮下方，非阻断）。 */
+    /** 页面顶部 TLS / 明文 HTTP 警告条（原 ⋮ 按钮已移除，固定在内容区顶部，非阻断）。 */
     private var warningBanner: TextView? = null
 
     /** 当前生效的证书警告信息；null 表示没有证书警告。 */
@@ -109,7 +114,17 @@ class MainActivity : ComponentActivity() {
     /** 已交给系统文件选择器的 WebView 回调，等待 ActivityResult 返回。 */
     private var pendingFileCallback: ValueCallback<Array<Uri>>? = null
 
-    private var lastBackPressedAt = 0L
+    /**
+     * 输入法是否可见（v0.4.1）。由 root 的 window insets 监听维护，供返回手势状态机
+     * 判断“先收键盘、再后退/弹菜单”。
+     */
+    private var keyboardVisible = false
+
+    /** 「应用菜单」AlertDialog（v0.4.1，由返回手势从根页面弹出）；返回时先关它。 */
+    private var menuDialog: AlertDialog? = null
+
+    /** 首次使用提示是否已排队，避免一次启动里重复 post Toast。 */
+    private var backGestureHintPending = false
 
     private val session: SessionStore by lazy { SessionStore(this) }
 
@@ -180,6 +195,8 @@ class MainActivity : ComponentActivity() {
         root.setBackgroundColor(color(R.color.dsh_bg))
         setContentView(root)
 
+        // v0.4.1：返回手势打开「应用菜单」——先维护输入法可见性，再注册返回状态机。
+        setupImeTracking()
         setupBackHandling()
 
         if (session.hasPairing) {
@@ -194,7 +211,6 @@ class MainActivity : ComponentActivity() {
     private fun showPairing() {
         teardownWeb()
         root.removeAllViews()
-        lastBackPressedAt = 0L
 
         val container = FrameLayout(this)
         container.setBackgroundColor(color(R.color.dsh_bg))
@@ -289,7 +305,6 @@ class MainActivity : ComponentActivity() {
 
         // 旧直连模式：清掉可能残留的认证网关 pin/标记，避免同 host 误走 pin 严格模式。
         session.saveDirectPairing(normalized, token)
-        lastBackPressedAt = 0L
         showWeb()
     }
 
@@ -368,7 +383,6 @@ class MainActivity : ComponentActivity() {
                 // 否则后续密码/TOTP 登录会被网关判定 device_required。
                 storeCookies(payload.baseUrl, grant.cookies)
                 Toast.makeText(this, R.string.pair_success, Toast.LENGTH_SHORT).show()
-                lastBackPressedAt = 0L
                 showWeb()
             }.onFailure { error ->
                 val detail = describeAuthError(error)
@@ -532,23 +546,13 @@ class MainActivity : ComponentActivity() {
         )
         progressBar = progress
 
-        val menuButton = createMenuButton()
-        // 触控目标 ≥ 48dp，满足无障碍最小尺寸要求。
-        container.addView(
-            menuButton,
-            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP or Gravity.END).apply {
-                topMargin = dp(8)
-                rightMargin = dp(8)
-            }
-        )
-
-        // 警告条：置于 ⋮ 按钮下方（48dp 按钮 + 上下各 8dp），整条可点但绝不遮挡菜单。
+        // v0.4.1：悬浮 ⋮ 按钮已移除（会遮挡 dsh GUI 右上角「打开右侧边栏」），
+        // 应用菜单改由系统返回手势/返回键从根页面弹出（见 setupBackHandling）。
+        // 警告条：贴在内容区顶部（不再为按钮让位），整条可点但不遮挡 dsh 顶栏。
         val banner = createWarningBanner()
         container.addView(
             banner,
-            FrameLayout.LayoutParams(matchParent, wrapContent, Gravity.TOP).apply {
-                topMargin = dp(MENU_BUTTON_SIZE_DP + MENU_BUTTON_MARGIN_DP * 2)
-            }
+            FrameLayout.LayoutParams(matchParent, wrapContent, Gravity.TOP)
         )
         warningBanner = banner
         banner.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
@@ -557,6 +561,9 @@ class MainActivity : ComponentActivity() {
         refreshWarningBanner()
 
         newHost.applyInsets()
+
+        // 首次进入主界面提示一次「返回手势可打开应用菜单」。
+        maybeShowBackGestureHint()
 
         val token = session.token
         val initialUrl = if (token.isNullOrBlank()) {
@@ -884,30 +891,132 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun createMenuButton(): TextView {
-        val button = TextView(this)
-        button.text = "\u22EE"
-        button.gravity = Gravity.CENTER
-        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-        button.setTextColor(color(R.color.dsh_text))
-        button.isClickable = true
-        button.isFocusable = true
-        button.contentDescription = getString(R.string.menu_open)
-        button.minWidth = dp(48)
-        button.minHeight = dp(48)
-        button.background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(0x33808080)
+    // ------------------------------------------------- 应用菜单（v0.4.1 返回手势）
+
+    /**
+     * 「应用菜单」：v0.4.1 移除悬浮 ⋮ 按钮，改为根页面按返回（系统返回手势/三键返回键）
+     * 弹出本列表。用 [AlertDialog.Builder.setItems] 实现，不引入新依赖。
+     *
+     * 菜单项、顺序与 v0.4.0 的 PopupMenu 一致，末尾新增「退出应用」。
+     * 打开期间记录 [menuDialog]，返回键先关菜单（正常情况下 Dialog 会自行消费返回事件，
+     * 这里是防御性处理）。
+     */
+    private fun showMenu() {
+        if (isFinishing || isDestroyed) return
+        dismissMenuIfShowing()
+
+        val actions = mutableListOf<Int>()
+        val labels = mutableListOf<CharSequence>()
+        actions += MENU_REFRESH
+        labels += getString(R.string.menu_refresh)
+        actions += MENU_PAIR
+        labels += getString(R.string.menu_pair)
+        // 登出只在认证网关模式有意义（旧直连模式没有网关登录会话）。
+        if (session.authGate) {
+            actions += MENU_LOGOUT
+            labels += getString(R.string.menu_logout)
         }
-        button.setOnClickListener { showMenu(button) }
-        return button
+        actions += MENU_DIAGNOSTICS
+        labels += getString(R.string.menu_diagnostics)
+        actions += MENU_ABOUT
+        labels += getString(R.string.menu_about)
+        actions += MENU_EXIT
+        labels += getString(R.string.menu_exit_app)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.app_menu_title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                val action = actions.getOrNull(which) ?: return@setItems
+                runMenuAction(action)
+            }
+            .create()
+        dialog.setOnDismissListener {
+            if (menuDialog === dialog) {
+                menuDialog = null
+            }
+        }
+        menuDialog = dialog
+        try {
+            dialog.show()
+            Log.i(TAG, "app menu shown via back gesture")
+        } catch (t: Throwable) {
+            Log.w(TAG, "show app menu failed", t)
+            menuDialog = null
+        }
+    }
+
+    /** 菜单动作分发：与 v0.4.0 PopupMenu 的点击行为一一对应。 */
+    private fun runMenuAction(action: Int) {
+        when (action) {
+            MENU_REFRESH -> {
+                dismissError()
+                host?.reload()
+            }
+            MENU_PAIR -> pairAgain()
+            MENU_LOGOUT -> logout()
+            MENU_DIAGNOSTICS -> showDiagnostics()
+            MENU_ABOUT -> showAbout()
+            MENU_EXIT -> exitApp()
+            else -> Log.w(TAG, "unknown app menu action: $action")
+        }
+    }
+
+    /** 关闭应用菜单；返回 true 表示确实关掉了一个正在显示的菜单。 */
+    private fun dismissMenuIfShowing(): Boolean {
+        val dialog = menuDialog ?: return false
+        if (!dialog.isShowing) {
+            menuDialog = null
+            return false
+        }
+        menuDialog = null
+        try {
+            dialog.dismiss()
+        } catch (t: Throwable) {
+            Log.w(TAG, "dismiss app menu failed", t)
+        }
+        return true
+    }
+
+    /** 退出应用：结束本任务栈里的所有 Activity（不卸载、不清数据）。 */
+    private fun exitApp() {
+        Log.i(TAG, "exit app requested from app menu")
+        try {
+            finishAffinity()
+        } catch (t: Throwable) {
+            Log.w(TAG, "finishAffinity failed, fallback to finish()", t)
+            finish()
+        }
+    }
+
+    /**
+     * 首次进入主界面时提示一次「返回手势可打开应用菜单」。
+     *
+     * 用 SharedPreferences（[KEY_BACK_GESTURE_HINT]）记录已提示，只弹一次；延迟到页面
+     * 基本就绪再 Toast，避免和首屏加载/配对成功提示叠在同一瞬间。
+     */
+    private fun maybeShowBackGestureHint() {
+        if (backGestureHintPending) return
+        val prefs = getSharedPreferences(AppConfig.PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_BACK_GESTURE_HINT, false)) return
+        backGestureHintPending = true
+        mainHandler.postDelayed({
+            backGestureHintPending = false
+            if (isFinishing || isDestroyed) return@postDelayed
+            try {
+                prefs.edit().putBoolean(KEY_BACK_GESTURE_HINT, true).apply()
+            } catch (t: Throwable) {
+                Log.w(TAG, "persist back gesture hint flag failed", t)
+            }
+            Toast.makeText(this, R.string.back_gesture_hint, Toast.LENGTH_LONG).show()
+            Log.i(TAG, "back gesture hint shown once")
+        }, BACK_GESTURE_HINT_DELAY_MS)
     }
 
     // -------------------------------------------------------- TLS / HTTP 警告条
 
     /**
      * 顶部警告条（代码构建）：默认隐藏；TLS 证书不受信任或明文 HTTP 时显示。
-     * 非阻断——固定在 ⋮ 菜单下方；显示时由 [applyWarningBannerPadding] 下移 WebView
+     * 非阻断——固定在内容区顶部；显示时由 [applyWarningBannerPadding] 下移 WebView
      * 内容区，不覆盖页面、不截获页面触摸。证书可点开详情。
      */
     private fun createWarningBanner(): TextView {
@@ -963,7 +1072,7 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 警告条不覆盖页面：显示时把 WebView 内容整体下移到警告条底边以下，
-     * 隐藏时恢复 0。[warningBanner] 自身仍固定在 ⋮ 菜单下方（topMargin 不变）。
+     * 隐藏时恢复 0。[warningBanner] 自身固定在内容区顶部（topMargin 为 0，不依赖已移除的 ⋮ 按钮）。
      *
      * 注意 WebHost 的 insets padding 加在 container 上，这里只动 WebView 自身。
      */
@@ -972,12 +1081,12 @@ class MainActivity : ComponentActivity() {
         val webView = host?.webView ?: return
         val paddingTop = if (banner.visibility == View.VISIBLE) {
             // banner.bottom 相对 container，含 container 的 insets padding；减去 WebView.top
-            // 得到“相对 WebView 内容区”的占位高度（≈ ⋮ 区 64dp + 实测条高），避免重复计入状态栏。
+            // 得到“相对 WebView 内容区”的占位高度（实测条高），避免重复计入状态栏。
             val bottom = banner.bottom
             if (bottom > 0) {
                 (bottom - webView.top).coerceAtLeast(0)
             } else {
-                dp(MENU_BUTTON_SIZE_DP + MENU_BUTTON_MARGIN_DP * 2) + banner.measuredHeight
+                banner.measuredHeight
             }
         } else {
             0
@@ -1081,51 +1190,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun showMenu(anchor: View) {
-        val popup = PopupMenu(this, anchor)
-        popup.menu.add(0, MENU_REFRESH, 0, R.string.menu_refresh)
-        popup.menu.add(0, MENU_PAIR, 1, R.string.menu_pair)
-        // 登出只在认证网关模式有意义（旧直连模式没有网关登录会话）。
-        if (session.authGate) {
-            popup.menu.add(0, MENU_LOGOUT, 2, R.string.menu_logout)
-        }
-        popup.menu.add(0, MENU_DIAGNOSTICS, 3, R.string.menu_diagnostics)
-        popup.menu.add(0, MENU_ABOUT, 4, R.string.menu_about)
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_REFRESH -> {
-                    dismissError()
-                    host?.reload()
-                    true
-                }
-                MENU_PAIR -> {
-                    pairAgain()
-                    true
-                }
-                MENU_LOGOUT -> {
-                    logout()
-                    true
-                }
-                MENU_DIAGNOSTICS -> {
-                    showDiagnostics()
-                    true
-                }
-                MENU_ABOUT -> {
-                    showAbout()
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
-    }
-
     @Suppress("DEPRECATION")
     private fun showAbout() {
         val versionName = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.0"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.1"
         } catch (t: Throwable) {
-            "0.4.0"
+            "0.4.1"
         }
         val message = buildString {
             append(getString(R.string.app_name))
@@ -1292,7 +1362,6 @@ class MainActivity : ComponentActivity() {
         warningBanner = null
         currentTlsInfo = null
         dismissTlsDialog()
-        lastBackPressedAt = 0L
         showError(ErrorKind.RENDERER)
     }
 
@@ -1313,7 +1382,6 @@ class MainActivity : ComponentActivity() {
         authRenewAttempts = 0
         loginPageRenewTried = false
         pinProbePassedBase = null
-        lastBackPressedAt = 0L
         showPairing()
     }
 
@@ -1347,41 +1415,81 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ------------------------------------------------------------------ 返回键 / 生命周期
+    // ---------------------------------------------------------- 返回手势 / 生命周期
 
+    /**
+     * 维护 [keyboardVisible]：用 window insets 监听，而不是 InputMethodManager 猜测。
+     *
+     * - Android 11+（API 30）：`ime()` 是独立 inset 类型，[WindowInsetsCompat.isVisible]
+     *   直接读系统可见性；
+     * - Android 10 及以下：系统没有 `ime()` 类型，androidx 会把 adjustResize 压缩出的
+     *   键盘高度 / root 可见区域折算到 `ime()` inset 上（[WindowInsetsCompat] 内部兼容），
+     *   因此统一用 `isVisible(ime())` 判断，低版本也不会漏判。
+     *
+     * 监听器原样返回 insets，不影响子 view（container 自己还有 padByInsets）。
+     */
+    private fun setupImeTracking() {
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            keyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+    }
+
+    /** 收起输入法（API 26+ 兼容：旧版本由 WindowInsetsControllerCompat 走 InputMethodManager）。 */
+    private fun hideIme() {
+        // 立即置 false：hide() 有动画，快速连按返回时不应把下一次按键再吞掉。
+        keyboardVisible = false
+        try {
+            WindowInsetsControllerCompat(window, root)
+                .hide(WindowInsetsCompat.Type.ime())
+        } catch (t: Throwable) {
+            Log.w(TAG, "hide ime failed", t)
+        }
+    }
+
+    /**
+     * 返回事件状态机（v0.4.1）：
+     * 1. 错误覆盖层可见 → 关闭错误层（渲染进程已死则重建 WebView，避免留下空白页）；
+     * 2. 输入法可见 → 收起输入法；
+     * 3. WebView 有历史 → [android.webkit.WebView.goBack]；
+     * 4. 应用菜单正在显示 → 关闭菜单（正常情况下 Dialog 自己消费返回事件，这里是防御）；
+     * 5. 否则 → 弹出「应用菜单」。dsh SPA 无历史时每次返回都会弹菜单（符合预期）。
+     *
+     * 回调在 Activity 销毁时由 OnBackPressedDispatcher 自动移除。
+     */
     private fun setupBackHandling() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (errorOverlay != null) {
-                    if (host != null) {
-                        dismissError()
-                        return
+                    dismissError()
+                    if (host == null) {
+                        // 渲染进程死亡（overlay 后没有 WebView）：重建，别停在空白页。
+                        showWeb()
                     }
-                    // 渲染进程死亡后 WebView 已销毁：关掉覆盖层只会留下空白页，
-                    // 继续走正常的双击退出逻辑。
+                    return
+                }
+
+                if (keyboardVisible) {
+                    hideIme()
+                    return
                 }
 
                 val web = host?.webView
                 if (web != null && web.canGoBack()) {
-                    lastBackPressedAt = 0L
                     web.goBack()
                     return
                 }
 
-                val now = System.currentTimeMillis()
-                if (now - lastBackPressedAt <= BACK_EXIT_WINDOW_MS) {
-                    lastBackPressedAt = 0L
-                    finish()
-                    return
-                }
-                lastBackPressedAt = now
-                Toast.makeText(this@MainActivity, R.string.exit_confirm, Toast.LENGTH_SHORT)
-                    .show()
+                if (dismissMenuIfShowing()) return
+
+                showMenu()
             }
         })
     }
 
     private fun teardownWeb() {
+        dismissMenuIfShowing()
         try {
             pendingFileCallback?.onReceiveValue(null)
         } catch (t: Throwable) {
@@ -1422,6 +1530,7 @@ class MainActivity : ComponentActivity() {
         pinProbePassedBase = null
         redeemInFlight = false
         dismissRedeemProgress()
+        dismissMenuIfShowing()
         pendingLogoutBaseUrl = null
         cancelLogoutFallback()
         teardownWeb()
@@ -1474,12 +1583,12 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val TAG = "DSHMobile"
-        const val BACK_EXIT_WINDOW_MS = 2000L
         const val MENU_REFRESH = 1
         const val MENU_PAIR = 2
         const val MENU_DIAGNOSTICS = 3
         const val MENU_ABOUT = 4
         const val MENU_LOGOUT = 5
+        const val MENU_EXIT = 6
         const val DIAGNOSTICS_CLIP_LABEL = "DSH Mobile diagnostics"
         const val TLS_CLIP_LABEL = "DSH Mobile TLS certificate"
 
@@ -1501,9 +1610,9 @@ class MainActivity : ComponentActivity() {
 
         const val MAX_DEVICE_NAME_LENGTH = 64
 
-        /** ⋮ 菜单按钮的触控尺寸与边距（dp），警告条据此避让。 */
-        const val MENU_BUTTON_SIZE_DP = 48
-        const val MENU_BUTTON_MARGIN_DP = 8
+        /** 首次「返回手势打开应用菜单」提示的 SharedPreferences 键与延迟（ms）。 */
+        const val KEY_BACK_GESTURE_HINT = "back_gesture_menu_hint_v1"
+        const val BACK_GESTURE_HINT_DELAY_MS = 1200L
 
         /** 警告条配色：黄底深棕字（不新增颜色资源，保持单文件可读）。 */
         val WARNING_BG_COLOR = 0xFFFFF3CD.toInt()

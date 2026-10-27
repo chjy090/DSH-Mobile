@@ -43,15 +43,16 @@
     <string name="http_warning_banner">⚠ 当前为明文 HTTP，语音输入不可用，建议使用 HTTPS</string>
 
     <!-- 提示 -->
-    <string name="exit_confirm">再按一次返回键退出</string>
     <string name="loading">加载中…</string>
 
-    <!-- 菜单 -->
+    <!-- 菜单（v0.4.1：悬浮 ⋮ 按钮移除，改由返回手势打开应用菜单） -->
+    <string name="app_menu_title">应用菜单</string>
     <string name="menu_refresh">刷新</string>
     <string name="menu_pair">重新配对</string>
     <string name="menu_diagnostics">诊断日志</string>
     <string name="menu_about">关于</string>
-    <string name="menu_open">打开菜单</string>
+    <string name="menu_exit_app">退出应用</string>
+    <string name="back_gesture_hint">从屏幕边缘向内滑动（返回手势）可打开应用菜单</string>
 
     <!-- 诊断日志 -->
     <string name="diagnostics_title">诊断日志</string>

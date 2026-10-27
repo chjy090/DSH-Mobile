@@ -45,8 +45,8 @@ android {
         applicationId = "ai.deepseek.dsh.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.4.0"
+        versionCode = 8
+        versionName = "0.4.1"
 
         // v0.3.0 起不再内置任何证书/指纹：普通服务器 TLS 采用 fail-open；
         // v0.4.0 认证网关由扫码取得证书 pin，仅对该 host 走严格证书校验。
