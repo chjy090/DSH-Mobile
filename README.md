@@ -105,6 +105,8 @@ keytool -genkeypair -v -keystore signing/dsh-mobile.jks \
 
 ## 安装与使用
 
+详细的安装与配置步骤见 [docs/installation.md](docs/installation.md)。
+
 1. 将构建出的 APK 安装到 Android 8.0+ 手机或模拟器（可用 `adb install` 或文件管理器）。
 2. 确保手机与运行 `dsh` 的机器网络互通。
 3. 选择配对方式：
@@ -136,6 +138,7 @@ keytool -genkeypair -v -keystore signing/dsh-mobile.jks \
 ├── README.md
 ├── LICENSE
 ├── .gitignore
+├── docs/installation.md             安装与配置指南
 ├── build.gradle.kts                 Gradle 根构建脚本（插件版本声明）
 ├── settings.gradle.kts
 ├── gradle.properties
