@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    自适应图标前景（108dp viewport，内容位于 66dp 安全区内）。
+    意象：白色 "D" 形对话气泡 + 终端提示符（>_），提示符用背景色绘制形成"挖空"观感。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- D 形气泡主体：左侧竖干 + 右侧圆润碗形 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M36,30 H56 A24,24 0 0 1 56,78 H36 A6,6 0 0 1 30,72 V36 A6,6 0 0 1 36,30 Z" />
+
+    <!-- 对话气泡尾巴 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M44,78 L38,85 L52,78 Z" />
+
+    <!-- 终端提示符 > -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M44,46 L54,54 L44,62"
+        android:strokeColor="@color/ic_launcher_background"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="5" />
+
+    <!-- 终端光标 _ -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M60,62 H70"
+        android:strokeColor="@color/ic_launcher_background"
+        android:strokeLineCap="round"
+        android:strokeWidth="5" />
+</vector>

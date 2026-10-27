@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 亮色主题（默认值） -->
+    <color name="dsh_bg">#FFFFFFFF</color>
+    <color name="dsh_surface">#FFF4F5F7</color>
+    <color name="dsh_text">#FF1B1B1F</color>
+    <color name="dsh_text_secondary">#FF5F6368</color>
+    <color name="dsh_accent">#FF4D6BFE</color>
+    <color name="dsh_error">#FFD93025</color>
+
+    <!-- 自适应图标背景 -->
+    <color name="ic_launcher_background">#FF4D6BFE</color>
+</resources>

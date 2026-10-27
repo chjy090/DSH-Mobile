@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    网络安全配置（v0.3.0 起不再内置任何 CA）：
+    1. 只信任系统根证书；不固定服务器证书/指纹，换服务器或换证书无需重打包。
+    2. 允许明文流量：用户自填地址、sideload 自用，兼容仍跑 http:// 的部署。
+    3. 自签/未知证书由 WebView 触发 onReceivedSslError；WebHost 采用 fail-open
+       （一律 proceed + 顶部非阻断警告），因此这里不能阻断连接。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

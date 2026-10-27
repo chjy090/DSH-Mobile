@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色主题（values-night） -->
+    <color name="dsh_bg">#FF101114</color>
+    <color name="dsh_surface">#FF1B1D22</color>
+    <color name="dsh_text">#FFECEDEF</color>
+    <color name="dsh_text_secondary">#FF9AA0A6</color>
+    <color name="dsh_accent">#FF8FA4FF</color>
+    <color name="dsh_error">#FFF28B82</color>
+</resources>

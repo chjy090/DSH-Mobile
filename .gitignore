@@ -1,0 +1,30 @@
+# Gradle / Android build outputs
+.gradle/
+**/build/
+.kotlin/
+**/.cxx/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.hprof
+*.class
+
+# Local machine specifics (SDK path, signing credentials)
+local.properties
+.env
+
+# Signing material (never committed)
+signing/
+*.jks
+*.keystore
+*.p12
+*.key
+
+# IDE / OS noise
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DSH Mobile</string>
+
+    <!-- 配对 -->
+    <string name="pairing_title">连接 DSH Host</string>
+    <string name="pairing_message">输入 dsh Web GUI 地址；推荐 HTTPS（https://192.0.2.10:3080），语音输入需要安全上下文。可直接粘贴带 token 的完整链接。</string>
+    <string name="pairing_url_hint">https://192.0.2.10:3080</string>
+    <string name="pairing_https_hint">语音输入/安全上下文需要 HTTPS 地址：https://&lt;主机&gt;:3080（dsh 已改原生 HTTPS，http 地址不可用）。</string>
+    <string name="pairing_token_hint">Token（可选，留空则使用已有会话）</string>
+    <string name="btn_connect">连接</string>
+    <string name="btn_retry">重试</string>
+    <string name="btn_pair_again">重新配对</string>
+
+    <!-- 认证网关扫码配对（v0.4.0） -->
+    <string name="pair_scan">扫码配对</string>
+    <string name="pair_scan_title">扫描配对二维码</string>
+    <string name="pair_scan_hint">将服务器管理页显示的配对二维码放入取景框；二维码 2 分钟内有效，按返回键取消。</string>
+    <string name="pair_camera_permission">未获得相机权限，无法扫码；请在系统设置中允许相机后重试。</string>
+    <string name="pair_confirm_title">确认配对</string>
+    <string name="pair_confirm_message">服务器：%1$s\n证书 SHA-256：%2$s\n\n此设备首次配对：将向该服务器注册本设备，并保存用于会话自动续期的设备凭据。请确认二维码来自你的 DSH 管理页。</string>
+    <string name="pair_failed">配对失败，请确认服务器可达且二维码未过期后重试。</string>
+    <string name="pair_success">配对成功，请登录</string>
+    <string name="menu_logout">登出</string>
+    <string name="logout_failed">登出失败，请稍后重试</string>
+    <string name="auth_renewing">会话已过期，正在自动续期…</string>
+    <string name="cert_changed">服务器证书已变更，连接已阻止；请重新扫码配对以确认新证书。</string>
+    <string name="device_name_default">Android 设备</string>
+
+    <!-- 错误 -->
+    <string name="error_network">网络连接失败，请检查地址与网络后重试。</string>
+    <string name="error_auth">鉴权失败，token 无效或已过期，请重新配对。</string>
+    <string name="error_tls">HTTPS 证书校验失败，请确认地址与服务器证书后重试。</string>
+    <string name="error_renderer">页面渲染进程已停止，请重试。</string>
+    <string name="mic_permission_denied">未获得麦克风权限，语音输入不可用；可再次点击麦克风重试。</string>
+    <string name="invalid_address">服务器地址无效，请输入 http(s)://host:port</string>
+
+    <!-- 证书 / 明文警告（fail-open：只提示，不阻断连接） -->
+    <string name="tls_warning_banner">⚠ 证书不受信任：%1$s（点击查看详情，连接不受影响）</string>
+    <string name="tls_warning_title">证书详情</string>
+    <string name="tls_warning_copy">复制详情</string>
+    <string name="tls_warning_close">关闭</string>
+    <string name="http_warning_banner">⚠ 当前为明文 HTTP，语音输入不可用，建议使用 HTTPS</string>
+
+    <!-- 提示 -->
+    <string name="exit_confirm">再按一次返回键退出</string>
+    <string name="loading">加载中…</string>
+
+    <!-- 菜单 -->
+    <string name="menu_refresh">刷新</string>
+    <string name="menu_pair">重新配对</string>
+    <string name="menu_diagnostics">诊断日志</string>
+    <string name="menu_about">关于</string>
+    <string name="menu_open">打开菜单</string>
+
+    <!-- 诊断日志 -->
+    <string name="diagnostics_title">诊断日志</string>
+    <string name="diagnostics_copy">复制</string>
+    <string name="diagnostics_empty">暂无日志</string>
+
+    <!-- 操作反馈 -->
+    <string name="download_started">已开始下载</string>
+    <string name="download_saved">已保存到系统下载目录：%1$s</string>
+    <string name="download_failed">下载失败</string>
+    <string name="download_permission_denied">未获得存储权限，无法保存到下载目录</string>
+    <string name="download_unsupported">该链接暂不支持下载</string>
+    <string name="file_picker_failed">无法打开文件选择器</string>
+    <string name="webview_init_failed">WebView 初始化失败</string>
+    <string name="copied">已复制</string>
+</resources>
