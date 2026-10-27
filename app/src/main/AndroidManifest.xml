@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- DSH Mobile v0.4.1（versionCode 8）：WebView 外壳 + 认证网关扫码配对；返回手势打开应用菜单。 -->
+<!-- DSH Mobile v0.4.2（versionCode 9）：WebView 外壳 + 认证网关扫码配对；返回手势打开应用菜单。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />

@@ -85,6 +85,51 @@ class SessionStore(context: Context) {
             prefs.edit().putBoolean(AppConfig.KEY_AUTH_SESSION_ESTABLISHED, value).apply()
         }
 
+    /**
+     * v0.4.2：设备凭据是否曾在真实登录中验证成功（启动静默续期依据）。
+     *
+     * 与 [authSessionEstablished] 的区别：用户选择「退出当前会话」时只把后者清零，
+     * 本标记保留，因此下次打开 App 仍可用 deviceToken 静默换新会话；
+     * 「忘记此设备」/重新配对会清空全部 prefs，本标记随之为 false。
+     */
+    var authDeviceTrusted: Boolean
+        get() = prefs.getBoolean(AppConfig.KEY_AUTH_DEVICE_TRUSTED, false)
+        set(value) {
+            prefs.edit().putBoolean(AppConfig.KEY_AUTH_DEVICE_TRUSTED, value).apply()
+        }
+
+    /** v0.4.2：设备有效期（毫秒时间戳）；0 表示服务端未提供/未知。不敏感。 */
+    var deviceExpiresAt: Long
+        get() = prefs.getLong(AppConfig.KEY_AUTH_DEVICE_EXPIRES_AT, 0L)
+        set(value) {
+            prefs.edit()
+                .putLong(AppConfig.KEY_AUTH_DEVICE_EXPIRES_AT, value.coerceAtLeast(0L))
+                .apply()
+        }
+
+    /** v0.4.2：最近一次成功 renew 的时间（毫秒）；0 表示从未成功，用于前台续期节流。 */
+    var lastAuthRenewAt: Long
+        get() = prefs.getLong(AppConfig.KEY_AUTH_LAST_RENEW_AT, 0L)
+        set(value) {
+            prefs.edit()
+                .putLong(AppConfig.KEY_AUTH_LAST_RENEW_AT, value.coerceAtLeast(0L))
+                .apply()
+        }
+
+    /**
+     * 记录一次「成功进入网关后的 GUI」：设备凭据已验证，同时把从未设置过的
+     * 续期节流基准初始化为当前时间，避免刚登录就立刻触发前台续期。
+     */
+    fun recordAuthGateGuiLoaded() {
+        val editor = prefs.edit()
+            .putBoolean(AppConfig.KEY_AUTH_SESSION_ESTABLISHED, true)
+            .putBoolean(AppConfig.KEY_AUTH_DEVICE_TRUSTED, true)
+        if (lastAuthRenewAt <= 0L) {
+            editor.putLong(AppConfig.KEY_AUTH_LAST_RENEW_AT, System.currentTimeMillis())
+        }
+        editor.apply()
+    }
+
     /** 当前服务器的 deviceToken（仅认证网关模式）；Keystore 不可用时为进程内降级值。 */
     val deviceToken: String?
         get() = if (authGate) serverUrl?.let { deviceTokens.load(it) } else null
@@ -107,8 +152,16 @@ class SessionStore(context: Context) {
     /**
      * 保存扫码配对结果（设计契约 §5.3）：服务器地址 + 证书 pin + 加密 deviceToken。
      * 成功后旧的直连 token 被移除，后续 WebView 通过网关登录页建立会话。
+     *
+     * [deviceExpiresAt] 来自 redeem 响应的 `expiresAt`（网关侧设备有效期，毫秒）；
+     * 旧服务端未返回时传 null，仅影响「关于」里的展示，不影响登录/续期。
      */
-    fun saveAuthGateProfile(baseUrl: String, fingerprint: String, deviceToken: String) {
+    fun saveAuthGateProfile(
+        baseUrl: String,
+        fingerprint: String,
+        deviceToken: String,
+        deviceExpiresAt: Long? = null
+    ) {
         val normalizedBase = baseUrl.trim().trimEnd('/')
         val pin = CertPin.normalize(fingerprint) ?: return
         if (normalizedBase.isEmpty() || deviceToken.isBlank()) return
@@ -118,6 +171,12 @@ class SessionStore(context: Context) {
             .putString(AppConfig.KEY_PINNED_CERT, pin)
             .putBoolean(AppConfig.KEY_AUTH_GATE, true)
             .putBoolean(AppConfig.KEY_AUTH_SESSION_ESTABLISHED, false)
+            .putBoolean(AppConfig.KEY_AUTH_DEVICE_TRUSTED, false)
+            .putLong(
+                AppConfig.KEY_AUTH_DEVICE_EXPIRES_AT,
+                deviceExpiresAt?.takeIf { it > 0L } ?: 0L
+            )
+            .putLong(AppConfig.KEY_AUTH_LAST_RENEW_AT, 0L)
             .remove(AppConfig.KEY_TOKEN)
             .apply()
         deviceTokens.save(normalizedBase, deviceToken)
@@ -130,6 +189,9 @@ class SessionStore(context: Context) {
             .remove(AppConfig.KEY_PINNED_CERT)
             .putBoolean(AppConfig.KEY_AUTH_GATE, false)
             .putBoolean(AppConfig.KEY_AUTH_SESSION_ESTABLISHED, false)
+            .remove(AppConfig.KEY_AUTH_DEVICE_TRUSTED)
+            .remove(AppConfig.KEY_AUTH_DEVICE_EXPIRES_AT)
+            .remove(AppConfig.KEY_AUTH_LAST_RENEW_AT)
         val value = token?.trim()
         if (value.isNullOrEmpty()) {
             editor.remove(AppConfig.KEY_TOKEN)
@@ -146,6 +208,9 @@ class SessionStore(context: Context) {
             .remove(AppConfig.KEY_PINNED_CERT)
             .remove(AppConfig.KEY_AUTH_GATE)
             .remove(AppConfig.KEY_AUTH_SESSION_ESTABLISHED)
+            .remove(AppConfig.KEY_AUTH_DEVICE_TRUSTED)
+            .remove(AppConfig.KEY_AUTH_DEVICE_EXPIRES_AT)
+            .remove(AppConfig.KEY_AUTH_LAST_RENEW_AT)
             .remove(AppConfig.KEY_TOKEN)
             .remove(AppConfig.KEY_SERVER_URL)
             .apply()

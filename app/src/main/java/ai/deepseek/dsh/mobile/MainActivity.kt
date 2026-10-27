@@ -42,13 +42,17 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.Future
 
 /**
  * 唯一 Activity：配对视图 / WebView 主界面 / 原生错误覆盖层 / 返回手势（应用菜单）。
  *
  * v0.4.1 起不再有悬浮 ⋮ 按钮：从屏幕边缘内滑（系统返回手势）或三键导航返回键，
- * 在根页面弹出「应用菜单」AlertDialog；菜单包含刷新、重新配对、登出（网关模式）、
- * 诊断日志、关于、退出应用。
+ * 在根页面弹出「应用菜单」AlertDialog。v0.4.2 起认证网关模式支持启动静默登录、
+ * 前台恢复自动续期，并把菜单拆成「退出当前会话」与「忘记此设备（重新配对）」。
  */
 class MainActivity : ComponentActivity() {
 
@@ -74,9 +78,45 @@ class MainActivity : ComponentActivity() {
     private var authRenewAttempts = 0
 
     /**
+     * v0.4.2 启动静默登录 / 前台恢复续期状态。
+     *
+     * [authRenewInFlight] 是所有 renew（启动静默、401、前台）共享的互斥标记，
+     * 保证同一时刻最多一个续期请求；[startupRenewInFlight]/[foregroundRenewInFlight]
+     * 只用于区分来源与排查日志。
+     */
+    private var startupRenewInFlight = false
+    private var foregroundRenewInFlight = false
+    private var lastForegroundRenewAttemptAt = 0L
+
+    /** v0.4.2：当前后台 renew 的 Future；Activity 销毁/退出/重新配对时尽力取消。 */
+    private var authRenewFuture: Future<*>? = null
+
+    /**
+     * v0.4.2 renew 回调代际：退出登录、重新配对、忘记设备或 WebHost 重建时自增，
+     * 迟到的续期结果（含 Activity 销毁后才回到主线程的）会被直接丢弃。
+     */
+    private var authRenewGeneration = 0
+
+    /** v0.4.2：前台续期/导航发现设备凭据失效后，下一次前台强制回登录页。 */
+    private var forceLoginOnNextResume = false
+
+    /**
+     * v0.4.2：[forceLoginOnNextResume] 的原因。true 表示 401/设备失效，
+     * 下次强制登录时应提示「需要重新扫码配对」而不是泛化的“请重新登录”。
+     */
+    private var forceLoginDeviceRejected = false
+    private var forceLoginErrorCode: String? = null
+
+    /** v0.4.2：前台续期期间出现的主文档 401，等续期结果出来后再决定 reload/回登录页。 */
+    private var authExpiredDuringRenew = false
+
+    /** v0.4.2：启动静默续期因网络/TLS 失败；错误层的「重试」应重新尝试静默续期。 */
+    private var startupRenewRetryAvailable = false
+
+    /**
      * “登录页 → deviceToken 自动续期”本次 WebHost 生命周期内是否已尝试过。
      * 网关对未认证 HTML 主文档返回 302 登录页（不是 401），需要这个标记避免
-     * 续期失败后 reload 登录页 → 再续期的死循环。
+     * 续期失败后 reload 登录页 → 再续期的死循环。v0.4.2 启动静默续期开始前也会置位。
      */
     private var loginPageRenewTried = false
 
@@ -100,6 +140,16 @@ class MainActivity : ComponentActivity() {
 
     /** 页面顶部 TLS / 明文 HTTP 警告条（原 ⋮ 按钮已移除，固定在内容区顶部，非阻断）。 */
     private var warningBanner: TextView? = null
+
+    /**
+     * v0.4.2：顶部条容器（TLS/HTTP 警告条 + 认证状态条）。
+     * WebView 内容区按它的实际高度整体下移，两条同时显示时不会互相遮挡。
+     */
+    private var topBannerContainer: LinearLayout? = null
+
+    /** v0.4.2：认证状态条（正在静默登录 / 续期失败提示），可点击重试或重新配对。 */
+    private var authNoticeBanner: TextView? = null
+    private var authNoticeAction: (() -> Unit)? = null
 
     /** 当前生效的证书警告信息；null 表示没有证书警告。 */
     private var currentTlsInfo: TlsInfo? = null
@@ -200,7 +250,8 @@ class MainActivity : ComponentActivity() {
         setupBackHandling()
 
         if (session.hasPairing) {
-            showWeb()
+            // v0.4.2：冷启动/首次进入主界面时优先尝试 deviceToken 静默登录。
+            showWeb(startupRenew = true)
         } else {
             showPairing()
         }
@@ -377,8 +428,12 @@ class MainActivity : ComponentActivity() {
                 session.saveAuthGateProfile(
                     baseUrl = payload.baseUrl,
                     fingerprint = payload.certSha256,
-                    deviceToken = grant.deviceToken
+                    deviceToken = grant.deviceToken,
+                    // 网关 redeem 响应的 expiresAt 即设备有效期；旧服务端没有时为 null。
+                    deviceExpiresAt = grant.expiresAt
                 )
+                // 新配对必须重新登录（首次仍走用户名/密码/TOTP），清掉可能残留的抑制标记。
+                suppressStartupAutoLogin = false
                 // 配对响应里的 Set-Cookie（设备绑定 cookie）交给 WebView，
                 // 否则后续密码/TOTP 登录会被网关判定 device_required。
                 storeCookies(payload.baseUrl, grant.cookies)
@@ -463,7 +518,14 @@ class MainActivity : ComponentActivity() {
 
     // -------------------------------------------------------------- WebView 主界面
 
-    private fun showWeb() {
+    /**
+     * 重建 WebView 主界面。
+     *
+     * @param startupRenew v0.4.2：true 表示这是冷启动/首次进入主界面，允许先用
+     *   deviceToken 静默换会话再直接加载 GUI；扫码配对成功后的首次加载传 false，
+     *   仍要求用户名/密码/TOTP 登录。
+     */
+    private fun showWeb(startupRenew: Boolean = false) {
         val base = session.serverUrl
         if (base.isNullOrBlank()) {
             showPairing()
@@ -548,14 +610,23 @@ class MainActivity : ComponentActivity() {
 
         // v0.4.1：悬浮 ⋮ 按钮已移除（会遮挡 dsh GUI 右上角「打开右侧边栏」），
         // 应用菜单改由系统返回手势/返回键从根页面弹出（见 setupBackHandling）。
-        // 警告条：贴在内容区顶部（不再为按钮让位），整条可点但不遮挡 dsh 顶栏。
+        // v0.4.2：警告条与认证状态条叠在同一个顶部容器里，WebView 内容区一次让出总高度。
+        val topBars = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            elevation = dp(4).toFloat()
+        }
         val banner = createWarningBanner()
+        topBars.addView(banner, LinearLayout.LayoutParams(matchParent, wrapContent))
+        val notice = createAuthNoticeBanner()
+        topBars.addView(notice, LinearLayout.LayoutParams(matchParent, wrapContent))
         container.addView(
-            banner,
+            topBars,
             FrameLayout.LayoutParams(matchParent, wrapContent, Gravity.TOP)
         )
+        topBannerContainer = topBars
         warningBanner = banner
-        banner.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        authNoticeBanner = notice
+        topBars.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             applyWarningBannerPadding()
         }
         refreshWarningBanner()
@@ -575,14 +646,27 @@ class MainActivity : ComponentActivity() {
             newHost.load(initialUrl)
             return
         }
-        // P2-4：加载 GUI 前先用 pin 严格 TLS 预检 /__auth/whoami。失败说明证书已变
-        // 或网关不可达，覆盖 CERT_CHANGED 错误层并提示重新扫码；成功才加载。
-        // 本次页面生命周期成功后缓存，避免每次重建都多一次 RTT。
         val pin = CertPin.normalize(pinnedCert)
         if (pin == null) {
             showError(ErrorKind.CERT_CHANGED)
             return
         }
+
+        // v0.4.2 启动静默登录：只有“曾经成功登录过”且本进程没有刚退出当前会话时才尝试。
+        // 首次扫码配对后 authDeviceTrusted/authSessionEstablished 均为 false，仍走登录页；
+        // v0.4.1 升级用户用 authSessionEstablished 兼容（老版本没有 trusted 键）。
+        val profile = session.authGateProfile()
+        val trusted = session.authDeviceTrusted || session.authSessionEstablished
+        if (startupRenew && trusted && !suppressStartupAutoLogin &&
+            profile != null && profile.canRenew
+        ) {
+            runStartupSilentRenew(newHost, base, pin, profile, progress)
+            return
+        }
+
+        // P2-4：加载 GUI 前先用 pin 严格 TLS 预检 /__auth/whoami。失败说明证书已变
+        // 或网关不可达，覆盖 CERT_CHANGED 错误层并提示重新扫码；成功才加载。
+        // 本次页面生命周期成功后缓存，避免每次重建都多一次 RTT。
         if (pinProbePassedBase == base) {
             newHost.load(initialUrl)
             return
@@ -600,6 +684,133 @@ class MainActivity : ComponentActivity() {
                 showError(ErrorKind.CERT_CHANGED)
             }
         }
+    }
+
+    // -------------------------------------------------- 认证网关静默登录（v0.4.2）
+
+    /**
+     * 启动静默登录：用 deviceToken 换新 session，成功把 Set-Cookie 注入 WebView 后
+     * **直接加载 GUI**（不先闪登录页）；失败则加载登录页，并在顶部给出可重试/重新配对提示。
+     *
+     * 与 [handleAuthExpired] 共用 [authRenewInFlight]，并预先置位 [loginPageRenewTried]，
+     * 因此失败后登录页不会再自动触发一次同样的续期（避免循环）；成功进入 GUI 后由
+     * [trackAuthGatePage] 复位该标记。
+     */
+    private fun runStartupSilentRenew(
+        webHost: WebHost,
+        base: String,
+        pin: String,
+        profile: AuthGateProfile,
+        progress: ProgressBar?
+    ) {
+        if (authRenewInFlight || startupRenewInFlight) return
+        val deviceToken = profile.deviceToken
+        if (deviceToken.isNullOrBlank()) {
+            webHost.load("$base$LOGIN_PATH")
+            return
+        }
+        authRenewInFlight = true
+        startupRenewInFlight = true
+        loginPageRenewTried = true
+        startupRenewRetryAvailable = false
+        val generation = ++authRenewGeneration
+        progress?.isIndeterminate = true
+        progress?.progress = 0
+        progress?.visibility = View.VISIBLE
+        showAuthNotice(getString(R.string.auth_silent_login), null, isError = false)
+
+        authRenewFuture = authGateClient.renewAsync(base, pin, deviceToken) { outcome ->
+            if (generation != authRenewGeneration) return@renewAsync
+            authRenewFuture = null
+            authRenewInFlight = false
+            startupRenewInFlight = false
+            if (isFinishing || isDestroyed) return@renewAsync
+            if (pendingLogoutBaseUrl != null) return@renewAsync
+            if (host !== webHost) return@renewAsync
+
+            progress?.isIndeterminate = false
+            progress?.progress = 0
+
+            if (outcome.ok) {
+                pinProbePassedBase = base
+                storeCookies(base, outcome.cookies)
+                session.lastAuthRenewAt = System.currentTimeMillis()
+                outcome.deviceExpiresAt?.takeIf { it > 0L }?.let { session.deviceExpiresAt = it }
+                clearAuthNotice()
+                Log.i(TAG, "startup silent renew ok; loading GUI")
+                webHost.load("$base/")
+                return@renewAsync
+            }
+
+            val rejected = outcome.deviceRejected
+            Log.w(
+                TAG,
+                "startup silent renew failed: status=${outcome.status ?: "-"} " +
+                    "error=${outcome.errorCode ?: "-"} rejected=$rejected"
+            )
+            if (rejected) {
+                // 设备凭据已被服务端拒绝：用户名/密码登录也会 device_required，必须重新扫码。
+                startupRenewRetryAvailable = false
+                session.authSessionEstablished = false
+                showAuthNotice(
+                    getString(deviceRejectedMessage(outcome.errorCode)),
+                    action = { confirmForgetDevice() },
+                    isError = true
+                )
+            } else {
+                // 网络/TLS 等暂时性失败：保留设备凭据，登录页顶部提供“点击重试”。
+                startupRenewRetryAvailable = true
+                pinProbePassedBase = null
+                showAuthNotice(
+                    getString(R.string.auth_renew_failed_network),
+                    action = { retryStartupSilentRenew() },
+                    isError = true
+                )
+            }
+            webHost.load("$base$LOGIN_PATH")
+        }
+    }
+
+    /** 顶部认证提示条上的「重试」入口：重新走一次启动静默登录。 */
+    private fun retryStartupSilentRenew() {
+        if (authRenewInFlight) return
+        dismissError()
+        val webHost = host
+        if (webHost == null) {
+            showWeb(startupRenew = true)
+            return
+        }
+        val base = session.serverUrl ?: return
+        val pin = session.pinnedCertSha256 ?: return
+        val profile = session.authGateProfile() ?: return
+        if (!profile.canRenew) {
+            showPairing()
+            return
+        }
+        runStartupSilentRenew(webHost, base, pin, profile, progressBar)
+    }
+
+    /** 设备已失效时按服务端错误码选择提示文案（不含 token）。 */
+    private fun deviceRejectedMessage(errorCode: String?): Int =
+        if (errorCode == "origin_changed") {
+            R.string.auth_device_origin_changed
+        } else {
+            R.string.auth_device_invalid
+        }
+
+    /**
+     * 尽力取消后台 renew（Activity 销毁/退出登录/忘记设备时）。
+     *
+     * `Future.cancel(true)` 只是尽力而为：HttpsURLConnection 不一定响应线程中断，
+     * 但还有 15s 超时；即使回调到达，也会被 [authRenewGeneration] 丢弃。
+     */
+    private fun cancelAuthRenewIo() {
+        try {
+            authRenewFuture?.cancel(true)
+        } catch (t: Throwable) {
+            Log.w(TAG, "cancel auth renew failed", t)
+        }
+        authRenewFuture = null
     }
 
     /**
@@ -634,6 +845,8 @@ class MainActivity : ComponentActivity() {
             bar.visibility = View.GONE
             return
         }
+        // 启动静默续期结束后进度条从 indeterminate 切回具体进度。
+        bar.isIndeterminate = false
         bar.progress = value.coerceIn(0, 100)
         bar.visibility = if (value >= 100) View.GONE else View.VISIBLE
     }
@@ -641,7 +854,10 @@ class MainActivity : ComponentActivity() {
     @Suppress("UNUSED_PARAMETER")
     private fun onWebPageFinished(url: String?) {
         if (errorOverlay == null) {
-            progressBar?.visibility = View.GONE
+            progressBar?.let { bar ->
+                bar.isIndeterminate = false
+                bar.visibility = View.GONE
+            }
         }
         // 只有主文档没有 401 的正常结束才清零续期计数，避免“续期成功但 cookie 无效”
         // 引起的 401 → renew → reload 死循环。
@@ -688,8 +904,16 @@ class MainActivity : ComponentActivity() {
             maybeRenewFromLoginPage(url)
         } else if (path.isNotEmpty() && !path.startsWith(AUTH_PATH_PREFIX)) {
             // 网关反代出来的 GUI 页面：首次登录完成（或既有 session 有效）。
-            session.authSessionEstablished = true
+            // v0.4.2：同时记录“设备凭据已验证”，供下次启动静默登录使用。
+            session.recordAuthGateGuiLoaded()
             loginPageRenewTried = false
+            forceLoginOnNextResume = false
+            forceLoginDeviceRejected = false
+            forceLoginErrorCode = null
+            authExpiredDuringRenew = false
+            startupRenewRetryAvailable = false
+            suppressStartupAutoLogin = false
+            clearAuthNotice()
         }
     }
 
@@ -732,6 +956,8 @@ class MainActivity : ComponentActivity() {
      *   session cookie 并 reload（[renewedPageUrl] 非空时改为加载该页，用于登录页续期
      *   后直接进入 GUI）；失败/连续失败 → 加载 /__auth/login；
      * - 无 deviceToken（旧直连模式或设备凭据丢失）→ 直接加载登录页。
+     *
+     * v0.4.2：若前台续期已判定设备凭据失效，则下一次 401/导航直接回登录页，不再续期。
      */
     private fun handleAuthExpired(renewedPageUrl: String? = null) {
         // 登出流程中出现的 401 不续期（否则会把刚清掉的会话又建回来），直接回登录页。
@@ -745,33 +971,50 @@ class MainActivity : ComponentActivity() {
             showPairing()
             return
         }
+        if (forceLoginOnNextResume) {
+            // 前台静默续期已经确认需要重新登录：本次导航直接走登录页，不再自动续期。
+            forceLoginOnNextResume = false
+            Log.i(TAG, "forced login after foreground renew failure")
+            openForcedLoginPage()
+            return
+        }
         val profile = session.authGateProfile()
         if (profile == null || profile.deviceToken.isNullOrBlank()) {
             openLoginPage(base)
             return
         }
-        if (authRenewInFlight) return
+        if (authRenewInFlight) {
+            // 启动/前台续期已在进行：等它的结果决定 reload 还是回登录页，避免重复请求。
+            authExpiredDuringRenew = true
+            return
+        }
         if (authRenewAttempts >= MAX_AUTH_RENEW_ATTEMPTS) {
             authRenewAttempts = 0
             Log.w(TAG, "auth renew attempts exhausted, fallback to login page")
-            openLoginPage(base)
+            openLoginPageWithNotice(getString(R.string.auth_renew_login_required))
             return
         }
 
         authRenewInFlight = true
         authRenewAttempts++
+        val generation = ++authRenewGeneration
         Toast.makeText(this, R.string.auth_renewing, Toast.LENGTH_SHORT).show()
-        authGateClient.renewAsync(
+        authRenewFuture = authGateClient.renewAsync(
             baseUrl = base,
             fingerprint = profile.pinnedCertSha256,
             deviceToken = profile.deviceToken
         ) { outcome ->
+            if (generation != authRenewGeneration) return@renewAsync
+            authRenewFuture = null
             authRenewInFlight = false
             if (isFinishing || isDestroyed) return@renewAsync
             // 用户已点登出：不要用续期结果把页面切回 GUI。
             if (pendingLogoutBaseUrl != null) return@renewAsync
+            authExpiredDuringRenew = false
             if (outcome.ok) {
                 storeCookies(base, outcome.cookies)
+                session.lastAuthRenewAt = System.currentTimeMillis()
+                outcome.deviceExpiresAt?.takeIf { it > 0L }?.let { session.deviceExpiresAt = it }
                 val target = renewedPageUrl
                 if (target != null) {
                     host?.load(target)
@@ -780,8 +1023,21 @@ class MainActivity : ComponentActivity() {
                 }
             } else {
                 authRenewAttempts = 0
-                Log.w(TAG, "session renew failed, fallback to login page")
-                openLoginPage(base)
+                if (outcome.deviceRejected) {
+                    session.authSessionEstablished = false
+                    Log.w(
+                        TAG,
+                        "session renew rejected: status=${outcome.status ?: "-"} " +
+                            "error=${outcome.errorCode ?: "-"}"
+                    )
+                    openLoginPageWithNotice(
+                        getString(deviceRejectedMessage(outcome.errorCode)),
+                        action = { confirmForgetDevice() }
+                    )
+                } else {
+                    Log.w(TAG, "session renew failed, fallback to login page")
+                    openLoginPageWithNotice(getString(R.string.auth_renew_login_required))
+                }
             }
         }
     }
@@ -796,11 +1052,184 @@ class MainActivity : ComponentActivity() {
         webHost.load("$baseUrl$LOGIN_PATH")
     }
 
+    /** 当前 WebView 主文档是否停在网关登录页（前台续期成功后据此直接进 GUI）。 */
+    private fun isCurrentPageLogin(): Boolean {
+        val url = host?.webView?.url ?: return false
+        return try {
+            Uri.parse(url).path == LOGIN_PATH
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    /** 加载登录页并在顶部显示认证失败提示（不覆盖页面，可带重试/重新配对动作）。 */
+    private fun openLoginPageWithNotice(
+        message: CharSequence,
+        action: (() -> Unit)? = null
+    ) {
+        val base = session.serverUrl
+        if (base.isNullOrBlank()) {
+            showPairing()
+            return
+        }
+        openLoginPage(base)
+        showAuthNotice(message, action, isError = true)
+    }
+
+    // ------------------------------------------------- 前台恢复自动续期（v0.4.2）
+
     /**
-     * ⋮ → 登出：用 WebView 以 POST 打开 `/__auth/logout`（服务端只接受 POST；GET 会 405），
+     * 前台恢复静默续期：GUI 已登录（[SessionStore.authSessionEstablished]）且距上次成功
+     * renew 超过 [FOREGROUND_RENEW_INTERVAL_MS] 时，后台换新 session 并更新设备有效期，
+     * **不刷新当前页面**。
+     *
+     * 失败处理：
+     * - 401/device_required/origin_changed → 标记 [forceLoginOnNextResume]，下一次前台或
+     *   导航时回登录页（不立即打断正在看的页面）；
+     * - 网络/TLS 暂时失败 → 只记日志，保留页面，下次前台按最小间隔重试。
+     */
+    private fun maybeForegroundRenew() {
+        if (!session.authGate || !session.authSessionEstablished) return
+        if (isFinishing || isDestroyed) return
+        if (pendingLogoutBaseUrl != null) return
+        if (authRenewInFlight || startupRenewInFlight || foregroundRenewInFlight) return
+        val webHost = host ?: return
+        val profile = session.authGateProfile() ?: return
+        if (!profile.canRenew) return
+        val deviceToken = profile.deviceToken ?: return
+        val now = System.currentTimeMillis()
+        val lastSuccess = session.lastAuthRenewAt
+        if (lastSuccess > 0L && now - lastSuccess < FOREGROUND_RENEW_INTERVAL_MS) return
+        // 失败后不要把每次前后台切换都变成一次网络请求；成功会推进 lastAuthRenewAt。
+        if (now - lastForegroundRenewAttemptAt < FOREGROUND_RENEW_RETRY_MIN_MS) return
+        lastForegroundRenewAttemptAt = now
+
+        val base = profile.baseUrl
+        val pin = profile.pinnedCertSha256
+        authRenewInFlight = true
+        foregroundRenewInFlight = true
+        val generation = ++authRenewGeneration
+        Log.i(
+            TAG,
+            "foreground renew start: lastSuccessAgeMs=" +
+                if (lastSuccess > 0L) (now - lastSuccess) else -1L
+        )
+        authRenewFuture = authGateClient.renewAsync(base, pin, deviceToken) { outcome ->
+            if (generation != authRenewGeneration) return@renewAsync
+            authRenewFuture = null
+            authRenewInFlight = false
+            foregroundRenewInFlight = false
+            if (isFinishing || isDestroyed) return@renewAsync
+            if (pendingLogoutBaseUrl != null) return@renewAsync
+
+            if (outcome.ok) {
+                storeCookies(base, outcome.cookies)
+                session.lastAuthRenewAt = System.currentTimeMillis()
+                outcome.deviceExpiresAt?.takeIf { it > 0L }?.let { session.deviceExpiresAt = it }
+                forceLoginOnNextResume = false
+                forceLoginDeviceRejected = false
+                forceLoginErrorCode = null
+                startupRenewRetryAvailable = false
+                Log.i(
+                    TAG,
+                    "foreground renew ok; deviceExpiresAt=${session.deviceExpiresAt}"
+                )
+                if (authExpiredDuringRenew) {
+                    // 续期期间页面已经 401：现在 cookie 已更新，补一次 reload。
+                    authExpiredDuringRenew = false
+                    host?.reload()
+                } else if (isCurrentPageLogin()) {
+                    // 启动静默登录失败后停在登录页：续期成功说明会话已恢复，直接进 GUI。
+                    clearAuthNotice()
+                    Log.i(TAG, "foreground renew ok on login page; loading GUI")
+                    host?.load("$base/")
+                }
+                return@renewAsync
+            }
+
+            val rejected = outcome.deviceRejected
+            if (rejected) {
+                session.authSessionEstablished = false
+                forceLoginOnNextResume = true
+                forceLoginDeviceRejected = true
+                forceLoginErrorCode = outcome.errorCode
+                Log.w(
+                    TAG,
+                    "foreground renew rejected: status=${outcome.status ?: "-"} " +
+                        "error=${outcome.errorCode ?: "-"}; will show login page next foreground"
+                )
+            } else {
+                Log.w(
+                    TAG,
+                    "foreground renew failed (transient): status=${outcome.status ?: "-"}; " +
+                        "keep current page"
+                )
+            }
+            if (authExpiredDuringRenew) {
+                authExpiredDuringRenew = false
+                forceLoginOnNextResume = false
+                forceLoginDeviceRejected = false
+                forceLoginErrorCode = null
+                if (rejected) {
+                    openLoginPageWithNotice(
+                        getString(deviceRejectedMessage(outcome.errorCode)),
+                        action = { confirmForgetDevice() }
+                    )
+                } else {
+                    openLoginPageWithNotice(getString(R.string.auth_renew_login_required))
+                }
+            }
+        }
+    }
+
+    /** 消费前台续期失败标记：下一次前台恢复时回登录页（只在主线程调用）。 */
+    private fun maybeHandleForcedLogin() {
+        if (!forceLoginOnNextResume) return
+        if (isFinishing || isDestroyed) return
+        if (!session.authGate) {
+            forceLoginOnNextResume = false
+            forceLoginDeviceRejected = false
+            forceLoginErrorCode = null
+            return
+        }
+        if (pendingLogoutBaseUrl != null) return
+        if (session.serverUrl.isNullOrBlank()) {
+            forceLoginOnNextResume = false
+            forceLoginDeviceRejected = false
+            forceLoginErrorCode = null
+            return
+        }
+        forceLoginOnNextResume = false
+        Log.i(TAG, "foreground renew was rejected earlier; showing login page")
+        openForcedLoginPage()
+    }
+
+    /**
+     * 消费 [forceLoginOnNextResume]：401/设备失效显示“重新扫码配对”并给重新配对入口；
+     * 其它失败显示通用的“请重新登录”。调用后清空原因标记。
+     */
+    private fun openForcedLoginPage() {
+        val rejected = forceLoginDeviceRejected
+        val errorCode = forceLoginErrorCode
+        forceLoginDeviceRejected = false
+        forceLoginErrorCode = null
+        if (rejected) {
+            openLoginPageWithNotice(
+                getString(deviceRejectedMessage(errorCode)),
+                action = { confirmForgetDevice() }
+            )
+        } else {
+            openLoginPageWithNotice(getString(R.string.auth_renew_login_required))
+        }
+    }
+
+    /**
+     * 「退出当前会话」：用 WebView 以 POST 打开 `/__auth/logout`（服务端只接受 POST；GET 会 405），
      * 让网关真正删除 session 并清 WebView 里的 session cookie，再回到登录页；
-     * deviceToken 与设备绑定 cookie 保留。登出页可能 302 到登录页，onPageFinished 不一定
-     * 停在 logout URL，因此用 [pendingLogoutBaseUrl] 标记“第一页结束即收尾”，并加 4s 超时兜底。
+     * deviceToken、设备绑定 cookie 与 [SessionStore.authDeviceTrusted] 保留，
+     * 因此下次打开 App 会静默续期自动登录。
+     * 登出页可能 302 到登录页，onPageFinished 不一定停在 logout URL，因此用
+     * [pendingLogoutBaseUrl] 标记“第一页结束即收尾”，并加 4s 超时兜底。
      */
     private fun logout() {
         val base = session.serverUrl
@@ -809,9 +1238,26 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, R.string.logout_failed, Toast.LENGTH_SHORT).show()
             return
         }
-        // 明确登出后不允许“登录页 → 自动续期”把会话又建回来；下次成功登录会重新置位。
+        // 明确退出会话后不允许当前进程里的“登录页 → 自动续期”把会话又建回来；
+        // 设备凭据保留，下次冷启动仍会静默登录。
+        // v0.4.1 升级用户没有 trusted 键：退出前已登录过就补记为可信，保证下次仍能自动登录。
+        if (session.authSessionEstablished) {
+            session.authDeviceTrusted = true
+        }
         session.authSessionEstablished = false
         loginPageRenewTried = true
+        suppressStartupAutoLogin = true
+        forceLoginOnNextResume = false
+        forceLoginDeviceRejected = false
+        forceLoginErrorCode = null
+        authRenewGeneration++
+        cancelAuthRenewIo()
+        authRenewInFlight = false
+        startupRenewInFlight = false
+        foregroundRenewInFlight = false
+        authExpiredDuringRenew = false
+        startupRenewRetryAvailable = false
+        clearAuthNotice()
         pendingLogoutBaseUrl = base
         scheduleLogoutFallback(base)
         if (!webHost.postUrl("$base$LOGOUT_PATH")) {
@@ -838,6 +1284,11 @@ class MainActivity : ComponentActivity() {
         cancelLogoutFallback()
         clearCookiesFor(baseUrl)
         authRenewAttempts = 0
+        authRenewInFlight = false
+        startupRenewInFlight = false
+        foregroundRenewInFlight = false
+        startupRenewRetryAvailable = false
+        authExpiredDuringRenew = false
         val webHost = host
         if (webHost == null) {
             showPairing()
@@ -850,6 +1301,75 @@ class MainActivity : ComponentActivity() {
             Log.e(TAG, "load login page after logout failed", t)
             Toast.makeText(this, R.string.logout_failed, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // --------------------------------------------- 忘记设备（v0.4.2 重新配对）
+
+    /**
+     * 「忘记此设备（重新配对）」确认框。
+     *
+     * 该操作不可逆（本机 deviceToken 被删除，必须重新扫码），因此先二次确认；
+     * 取消时保留当前会话与设备凭据。
+     */
+    private fun confirmForgetDevice() {
+        if (isFinishing || isDestroyed) return
+        try {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.forget_device_title)
+                .setMessage(R.string.forget_device_message)
+                .setPositiveButton(R.string.forget_device_confirm) { _, _ -> forgetDeviceNow() }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        } catch (t: Throwable) {
+            Log.w(TAG, "show forget device confirm failed", t)
+        }
+    }
+
+    /**
+     * 删除该 host 的 deviceToken、该 host 全部 WebView cookie（含设备绑定）与配对 profile，
+     * 回到配对页；下次必须重新扫码。先取消所有进行中的续期/登出，避免迟到回调再写 cookie。
+     */
+    private fun forgetDeviceNow() {
+        val base = session.serverUrl
+        if (base.isNullOrBlank()) {
+            session.clear()
+            showPairing()
+            return
+        }
+        Log.i(TAG, "forget device requested; clearing local device credential and cookies")
+        // 1) 作废迟到的 renew 回调，并取消登出超时。
+        authRenewGeneration++
+        cancelAuthRenewIo()
+        authRenewInFlight = false
+        startupRenewInFlight = false
+        foregroundRenewInFlight = false
+        pendingLogoutBaseUrl = null
+        cancelLogoutFallback()
+        loginPageRenewTried = true
+        forceLoginOnNextResume = false
+        forceLoginDeviceRejected = false
+        forceLoginErrorCode = null
+        authExpiredDuringRenew = false
+        startupRenewRetryAvailable = false
+        suppressStartupAutoLogin = false
+        clearAuthNotice()
+
+        // 2) 显式删除 deviceToken（session.clear 也会删，这里先删避免中间态）。
+        try {
+            DeviceTokenStore(this).clear(base)
+        } catch (t: Throwable) {
+            Log.w(TAG, "clear device token failed", t)
+        }
+        // 3) 清除该 host 的全部 WebView cookie（含设备绑定 cookie）。
+        clearCookiesFor(base, keepDeviceCookie = false)
+        // 4) 清除服务器地址/pin/信任标记/设备有效期等全部配对状态。
+        session.clear()
+
+        dismissRedeemProgress()
+        redeemInFlight = false
+        pinProbePassedBase = null
+        Toast.makeText(this, R.string.forget_device_done, Toast.LENGTH_SHORT).show()
+        showPairing()
     }
 
     /**
@@ -897,9 +1417,13 @@ class MainActivity : ComponentActivity() {
      * 「应用菜单」：v0.4.1 移除悬浮 ⋮ 按钮，改为根页面按返回（系统返回手势/三键返回键）
      * 弹出本列表。用 [AlertDialog.Builder.setItems] 实现，不引入新依赖。
      *
-     * 菜单项、顺序与 v0.4.0 的 PopupMenu 一致，末尾新增「退出应用」。
-     * 打开期间记录 [menuDialog]，返回键先关菜单（正常情况下 Dialog 会自行消费返回事件，
-     * 这里是防御性处理）。
+     * v0.4.2 菜单拆分（仅认证网关模式）：
+     * - 刷新；
+     * - 退出当前会话：结束服务端 session，保留 deviceToken/设备 cookie，下次打开自动登录；
+     * - 忘记此设备（重新配对）：删除本地 deviceToken、该 host 全部 cookie 与 profile。
+     *
+     * 认证网关模式下不再显示旧的「重新配对」（与「忘记此设备」行为重复）；直连模式保持
+     * v0.4.1 的「重新配对」。打开期间记录 [menuDialog]，返回键先关菜单。
      */
     private fun showMenu() {
         if (isFinishing || isDestroyed) return
@@ -909,12 +1433,16 @@ class MainActivity : ComponentActivity() {
         val labels = mutableListOf<CharSequence>()
         actions += MENU_REFRESH
         labels += getString(R.string.menu_refresh)
-        actions += MENU_PAIR
-        labels += getString(R.string.menu_pair)
-        // 登出只在认证网关模式有意义（旧直连模式没有网关登录会话）。
         if (session.authGate) {
-            actions += MENU_LOGOUT
-            labels += getString(R.string.menu_logout)
+            // 两项语义不同：前者只结束 session，后者删除设备凭据（必须重新扫码）。
+            actions += MENU_LOGOUT_SESSION
+            labels += getString(R.string.menu_logout_session)
+            actions += MENU_FORGET_DEVICE
+            labels += getString(R.string.menu_forget_device)
+        } else {
+            // 旧直连模式没有网关登录会话，保持 v0.4.1 的「重新配对」。
+            actions += MENU_PAIR
+            labels += getString(R.string.menu_pair)
         }
         actions += MENU_DIAGNOSTICS
         labels += getString(R.string.menu_diagnostics)
@@ -945,7 +1473,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** 菜单动作分发：与 v0.4.0 PopupMenu 的点击行为一一对应。 */
+    /** 菜单动作分发（认证网关模式下登出拆分为“退出会话/忘记设备”两项）。 */
     private fun runMenuAction(action: Int) {
         when (action) {
             MENU_REFRESH -> {
@@ -953,7 +1481,8 @@ class MainActivity : ComponentActivity() {
                 host?.reload()
             }
             MENU_PAIR -> pairAgain()
-            MENU_LOGOUT -> logout()
+            MENU_LOGOUT_SESSION -> logout()
+            MENU_FORGET_DEVICE -> confirmForgetDevice()
             MENU_DIAGNOSTICS -> showDiagnostics()
             MENU_ABOUT -> showAbout()
             MENU_EXIT -> exitApp()
@@ -1030,13 +1559,68 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER_VERTICAL
             isClickable = false
             isFocusable = false
-            // 高于 WebView（0），低于后续弹出的错误覆盖层。
-            elevation = dp(4).toFloat()
+            // 层级由父容器 topBars 统一抬高（4dp），避免两条横幅互相压盖。
+            elevation = 0f
             visibility = View.GONE
             setOnClickListener {
                 currentTlsInfo?.let { info -> showTlsDetails(info) }
             }
         }
+    }
+
+    /**
+     * v0.4.2 认证状态条：启动静默登录时显示「正在登录…」，失败时显示原因；
+     * 有重试/重新配对动作时整条可点。默认隐藏，不阻断页面加载。
+     */
+    private fun createAuthNoticeBanner(): TextView {
+        return TextView(this).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(AUTH_NOTICE_INFO_TEXT_COLOR)
+            setBackgroundColor(AUTH_NOTICE_INFO_BG_COLOR)
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = false
+            isFocusable = false
+            elevation = 0f
+            visibility = View.GONE
+            setOnClickListener {
+                val action = authNoticeAction ?: return@setOnClickListener
+                action()
+            }
+        }
+    }
+
+    /** 显示认证状态条；[action] 非空时整条可点（重试/重新配对）。 */
+    private fun showAuthNotice(
+        text: CharSequence,
+        action: (() -> Unit)? = null,
+        isError: Boolean = false
+    ) {
+        val banner = authNoticeBanner ?: return
+        banner.text = text
+        banner.setTextColor(
+            if (isError) AUTH_NOTICE_ERROR_TEXT_COLOR else AUTH_NOTICE_INFO_TEXT_COLOR
+        )
+        banner.setBackgroundColor(
+            if (isError) AUTH_NOTICE_ERROR_BG_COLOR else AUTH_NOTICE_INFO_BG_COLOR
+        )
+        authNoticeAction = action
+        banner.isClickable = action != null
+        banner.isFocusable = action != null
+        banner.visibility = View.VISIBLE
+        applyWarningBannerPadding()
+    }
+
+    /** 隐藏认证状态条（登录成功/退出登录/重新配对时）。 */
+    private fun clearAuthNotice() {
+        authNoticeAction = null
+        val banner = authNoticeBanner ?: return
+        banner.isClickable = false
+        banner.isFocusable = false
+        banner.visibility = View.GONE
+        applyWarningBannerPadding()
     }
 
     /**
@@ -1071,23 +1655,16 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 警告条不覆盖页面：显示时把 WebView 内容整体下移到警告条底边以下，
-     * 隐藏时恢复 0。[warningBanner] 自身固定在内容区顶部（topMargin 为 0，不依赖已移除的 ⋮ 按钮）。
-     *
-     * 注意 WebHost 的 insets padding 加在 container 上，这里只动 WebView 自身。
+     * 顶部条不覆盖页面：把 WebView 内容整体下移到 [topBannerContainer] 的实际高度，
+     * 两条横幅都隐藏时恢复 0。WebHost 的 insets padding 加在 container 上，
+     * 这里只动 WebView 自身，因此用容器高度即可，无需重复计入状态栏。
      */
     private fun applyWarningBannerPadding() {
-        val banner = warningBanner ?: return
+        val topBars = topBannerContainer ?: return
         val webView = host?.webView ?: return
-        val paddingTop = if (banner.visibility == View.VISIBLE) {
-            // banner.bottom 相对 container，含 container 的 insets padding；减去 WebView.top
-            // 得到“相对 WebView 内容区”的占位高度（实测条高），避免重复计入状态栏。
-            val bottom = banner.bottom
-            if (bottom > 0) {
-                (bottom - webView.top).coerceAtLeast(0)
-            } else {
-                banner.measuredHeight
-            }
+        val paddingTop = if (topBars.visibility == View.VISIBLE) {
+            val height = if (topBars.height > 0) topBars.height else topBars.measuredHeight
+            height.coerceAtLeast(0)
         } else {
             0
         }
@@ -1193,9 +1770,9 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun showAbout() {
         val versionName = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.1"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.2"
         } catch (t: Throwable) {
-            "0.4.1"
+            "0.4.2"
         }
         val message = buildString {
             append(getString(R.string.app_name))
@@ -1209,12 +1786,34 @@ class MainActivity : ComponentActivity() {
                 append('\n')
                 append(it)
             }
+            if (session.authGate) {
+                // v0.4.2：设备有效期来自 redeem 的 expiresAt 或 renew 的可选
+                // deviceExpiresAt；旧服务端未提供时显示“—”，不伪造数据。
+                append('\n')
+                append(
+                    getString(
+                        R.string.about_device_expires,
+                        formatDeviceExpiresAt(session.deviceExpiresAt)
+                    )
+                )
+            }
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.menu_about)
             .setMessage(message)
             .setPositiveButton(android.R.string.ok, null)
             .show()
+    }
+
+    /** 设备有效期展示（yyyy-MM-dd HH:mm）；0/非法值显示「—」。不涉及 token。 */
+    private fun formatDeviceExpiresAt(expiresAt: Long): String {
+        if (expiresAt <= 0L) return getString(R.string.value_unknown)
+        return try {
+            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(expiresAt))
+        } catch (t: Throwable) {
+            Log.w(TAG, "format device expiry failed", t)
+            getString(R.string.value_unknown)
+        }
     }
 
     /**
@@ -1340,6 +1939,12 @@ class MainActivity : ComponentActivity() {
             showWeb()
             return
         }
+        // v0.4.2：启动静默续期失败（网络/TLS）后，原生错误层的“重试”应重试静默登录，
+        // 而不是只刷新登录页——否则用户回到 App 后还得再输一次密码/TOTP。
+        if (kind == ErrorKind.NETWORK && startupRenewRetryAvailable) {
+            retryStartupSilentRenew()
+            return
+        }
         val webHost = host
         if (webHost == null) {
             showWeb()
@@ -1360,6 +1965,9 @@ class MainActivity : ComponentActivity() {
         progressBar = null
         errorOverlay = null
         warningBanner = null
+        topBannerContainer = null
+        authNoticeBanner = null
+        authNoticeAction = null
         currentTlsInfo = null
         dismissTlsDialog()
         showError(ErrorKind.RENDERER)
@@ -1374,11 +1982,21 @@ class MainActivity : ComponentActivity() {
     private fun pairAgain() {
         // 重新配对：先清该 host 的全部 WebView cookie（含 session/设备绑定），
         // 否则旧 session 仍有效会让新配对跳过首次用户名/密码/TOTP 登录。
+        authRenewGeneration++
+        cancelAuthRenewIo()
+        authRenewInFlight = false
+        startupRenewInFlight = false
+        foregroundRenewInFlight = false
+        forceLoginOnNextResume = false
+        forceLoginDeviceRejected = false
+        forceLoginErrorCode = null
+        authExpiredDuringRenew = false
+        startupRenewRetryAvailable = false
+        suppressStartupAutoLogin = false
         session.serverUrl?.let { clearCookiesFor(it, keepDeviceCookie = false) }
         session.clear()
         dismissRedeemProgress()
         redeemInFlight = false
-        authRenewInFlight = false
         authRenewAttempts = 0
         loginPageRenewTried = false
         pinProbePassedBase = null
@@ -1504,15 +2122,24 @@ class MainActivity : ComponentActivity() {
         errorOverlay = null
 
         warningBanner = null
+        topBannerContainer = null
+        authNoticeBanner = null
+        authNoticeAction = null
         currentTlsInfo = null
         currentIsHttp = false
         dismissTlsDialog()
 
-        // 认证网关会话/登出状态不跨 WebHost 生命周期。
+        // 认证网关会话/登出状态不跨 WebHost 生命周期；同时作废迟到的续期回调。
+        authRenewGeneration++
+        cancelAuthRenewIo()
         pendingLogoutBaseUrl = null
         cancelLogoutFallback()
         authRenewInFlight = false
+        startupRenewInFlight = false
+        foregroundRenewInFlight = false
         authRenewAttempts = 0
+        authExpiredDuringRenew = false
+        startupRenewRetryAvailable = false
         loginPageRenewTried = false
     }
 
@@ -1524,11 +2151,29 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         host?.onResume()
+        // v0.4.2：前台恢复先处理上次续期失败的强制登录，再做 1 小时节流的静默续期。
+        maybeHandleForcedLogin()
+        maybeForegroundRenew()
     }
 
     override fun onDestroy() {
         pinProbePassedBase = null
         redeemInFlight = false
+        // v0.4.2：退出 Activity 后丢弃所有 renew 回调（HTTP 连接由 15s 超时自行结束）。
+        authRenewGeneration++
+        cancelAuthRenewIo()
+        authRenewInFlight = false
+        startupRenewInFlight = false
+        foregroundRenewInFlight = false
+        forceLoginOnNextResume = false
+        forceLoginDeviceRejected = false
+        forceLoginErrorCode = null
+        authExpiredDuringRenew = false
+        startupRenewRetryAvailable = false
+        // 真正退出 App 时允许下次冷启动静默登录；仅旋转/重建时保留“刚退出会话”的抑制标记。
+        if (isFinishing) {
+            suppressStartupAutoLogin = false
+        }
         dismissRedeemProgress()
         dismissMenuIfShowing()
         pendingLogoutBaseUrl = null
@@ -1587,8 +2232,18 @@ class MainActivity : ComponentActivity() {
         const val MENU_PAIR = 2
         const val MENU_DIAGNOSTICS = 3
         const val MENU_ABOUT = 4
-        const val MENU_LOGOUT = 5
+        const val MENU_LOGOUT_SESSION = 5
         const val MENU_EXIT = 6
+        const val MENU_FORGET_DEVICE = 7
+
+        /**
+         * v0.4.2：本进程内刚「退出当前会话」后，抑制 Activity 重建（如旋转）时的启动
+         * 静默登录。真正退出 App（isFinishing）或冷启动（新进程）会复位，
+         * 因此下次打开 App 仍会自动登录。
+         */
+        @Volatile
+        private var suppressStartupAutoLogin = false
+
         const val DIAGNOSTICS_CLIP_LABEL = "DSH Mobile diagnostics"
         const val TLS_CLIP_LABEL = "DSH Mobile TLS certificate"
 
@@ -1605,6 +2260,10 @@ class MainActivity : ComponentActivity() {
         /** 401 自动续期最多尝试次数，超过后回登录页，避免死循环。 */
         const val MAX_AUTH_RENEW_ATTEMPTS = 2
 
+        /** v0.4.2：前台恢复静默续期间隔（1 小时）与失败后的最小重试间隔（1 分钟）。 */
+        const val FOREGROUND_RENEW_INTERVAL_MS = 60L * 60L * 1000L
+        const val FOREGROUND_RENEW_RETRY_MIN_MS = 60L * 1000L
+
         /** 登出页加载超时（ms）：页面 302/失败时仍能收尾回登录页。 */
         const val LOGOUT_FALLBACK_MS = 4000L
 
@@ -1617,5 +2276,11 @@ class MainActivity : ComponentActivity() {
         /** 警告条配色：黄底深棕字（不新增颜色资源，保持单文件可读）。 */
         val WARNING_BG_COLOR = 0xFFFFF3CD.toInt()
         val WARNING_TEXT_COLOR = 0xFF7A4F01.toInt()
+
+        /** v0.4.2 认证状态条配色：信息蓝 / 错误红。 */
+        val AUTH_NOTICE_INFO_BG_COLOR = 0xFFE8F0FE.toInt()
+        val AUTH_NOTICE_INFO_TEXT_COLOR = 0xFF174EA6.toInt()
+        val AUTH_NOTICE_ERROR_BG_COLOR = 0xFFFDECEA.toInt()
+        val AUTH_NOTICE_ERROR_TEXT_COLOR = 0xFF8A1C1C.toInt()
     }
 }

@@ -12,6 +12,7 @@ import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
@@ -34,12 +35,37 @@ data class DeviceGrant(
             "cookies=${cookies.size})"
 }
 
-/** 续期结果；成功时带回新的 session Set-Cookie，供 MainActivity 注入 WebView CookieManager。 */
+/**
+ * 续期结果；成功时带回新的 session Set-Cookie，供 MainActivity 注入 WebView CookieManager。
+ *
+ * v0.4.2 补充失败分类与可选设备有效期：
+ * - [status]：HTTP 状态码（网络/TLS 异常时为 null）；
+ * - [errorCode]：服务端 JSON 的 `error` 字段（如 `device_required` / `origin_changed`）；
+ * - [deviceExpiresAt]：服务端可选返回的 `deviceExpiresAt`（毫秒时间戳，旧服务端没有）。
+ *
+ * 这些字段均不含 token/cookie，可安全用于 UI 与日志。
+ */
 data class RenewOutcome(
     val ok: Boolean,
-    val cookies: List<String> = emptyList()
+    val cookies: List<String> = emptyList(),
+    val status: Int? = null,
+    val errorCode: String? = null,
+    val deviceExpiresAt: Long? = null
 ) {
-    override fun toString(): String = "RenewOutcome(ok=$ok, cookies=${cookies.size})"
+    /**
+     * 设备凭据是否已被服务端拒绝（需要重新扫码配对）。
+     *
+     * 网关的 `/__auth/renew` 对 device_required / origin_changed / token 无效统一返回 401；
+     * 同时兼容未来服务端把错误码放在 200/其它状态里的情况。
+     */
+    val deviceRejected: Boolean
+        get() = status == 401 ||
+            errorCode == "device_required" ||
+            errorCode == "origin_changed"
+
+    override fun toString(): String =
+        "RenewOutcome(ok=$ok, status=${status ?: "-"}, error=${errorCode ?: "-"}, " +
+            "cookies=${cookies.size}, hasDeviceExpiresAt=${deviceExpiresAt != null})"
 }
 
 /** 认证网关 HTTP 失败（携带 status 与服务端 error 码，便于 UI/日志定位）。 */
@@ -145,24 +171,35 @@ class AuthGateClient {
 
         return try {
             val response = postJson(endpoint, pin, body)
-            val bodyOk = if (response.body.isBlank()) {
-                true
-            } else {
-                try {
-                    JSONObject(response.body).optBoolean("ok", true)
-                } catch (t: Throwable) {
-                    true
-                }
+            val json = try {
+                if (response.body.isBlank()) null else JSONObject(response.body)
+            } catch (t: Throwable) {
+                // 网关正常返回 JSON；解析失败时按旧逻辑“无 ok 字段即成功”，
+                // 但保留 HTTP 状态码，让调用方能区分 401 设备失效与网络/TLS 失败。
+                null
             }
+            val bodyOk = json?.optBoolean("ok", true) ?: true
             val ok = response.status in 200..299 && bodyOk
+            val errorCode = if (ok) null else errorCodeOf(response.body)
             if (!ok) {
                 Log.w(
                     TAG,
                     "renew rejected: status=${response.status} " +
-                        "error=${errorCodeOf(response.body) ?: "unknown"} host=${endpoint.host}"
+                        "error=${errorCode ?: "unknown"} host=${endpoint.host}"
                 )
             }
-            RenewOutcome(ok, if (ok) response.cookies else emptyList())
+            RenewOutcome(
+                ok = ok,
+                cookies = if (ok) response.cookies else emptyList(),
+                status = response.status,
+                errorCode = errorCode,
+                // 兼容旧服务端：没有 deviceExpiresAt 时为 null，UI 显示“—”。
+                deviceExpiresAt = if (ok) {
+                    json?.optLong("deviceExpiresAt")?.takeIf { it > 0L }
+                } else {
+                    null
+                }
+            )
         } catch (t: Throwable) {
             Log.w(TAG, "renew failed: ${t.javaClass.simpleName} host=${endpoint.host}")
             RenewOutcome(false)
@@ -228,14 +265,20 @@ class AuthGateClient {
         }
     }
 
-    /** 后台续期，结果回主线程；回调保证只触发一次。 */
+    /**
+     * 后台续期，结果回主线程；回调保证只触发一次。
+     *
+     * 返回 [Future] 便于调用方在 Activity 销毁时 `cancel(true)`（HTTP 连接本身还有
+     * [TIMEOUT_MS] 上限；取消是尽力而为，回调仍可能被主线程投递，调用方需再用
+     * 生命周期/代际标记过滤）。
+     */
     fun renewAsync(
         baseUrl: String,
         fingerprint: String,
         deviceToken: String,
         onResult: (RenewOutcome) -> Unit
-    ) {
-        WORKERS.execute {
+    ): Future<*> {
+        return WORKERS.submit {
             val outcome = renewDetailed(baseUrl, fingerprint, deviceToken)
             MAIN.post {
                 try {

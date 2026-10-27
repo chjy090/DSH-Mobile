@@ -21,11 +21,19 @@
     <string name="pair_confirm_message">服务器：%1$s\n证书 SHA-256：%2$s\n\n此设备首次配对：将向该服务器注册本设备，并保存用于会话自动续期的设备凭据。请确认二维码来自你的 DSH 管理页。</string>
     <string name="pair_failed">配对失败，请确认服务器可达且二维码未过期后重试。</string>
     <string name="pair_success">配对成功，请登录</string>
-    <string name="menu_logout">登出</string>
-    <string name="logout_failed">登出失败，请稍后重试</string>
+    <string name="logout_failed">退出会话失败，请稍后重试</string>
     <string name="auth_renewing">会话已过期，正在自动续期…</string>
     <string name="cert_changed">服务器证书已变更，连接已阻止；请重新扫码配对以确认新证书。</string>
     <string name="device_name_default">Android 设备</string>
+
+    <!-- 启动静默登录 / 前台自动续期（v0.4.2） -->
+    <string name="auth_silent_login">正在使用设备凭据登录…</string>
+    <string name="auth_device_invalid">设备配对已失效，需要重新扫码配对（点击此处重新配对）</string>
+    <string name="auth_device_origin_changed">服务器地址已变更，设备配对已失效，需要重新扫码配对（点击此处重新配对）</string>
+    <string name="auth_renew_failed_network">自动登录失败：网络或 TLS 连接异常，点击重试</string>
+    <string name="auth_renew_login_required">自动续期失败，请重新登录</string>
+    <string name="about_device_expires">设备有效期至：%1$s</string>
+    <string name="value_unknown">—</string>
 
     <!-- 错误 -->
     <string name="error_network">网络连接失败，请检查地址与网络后重试。</string>
@@ -45,14 +53,22 @@
     <!-- 提示 -->
     <string name="loading">加载中…</string>
 
-    <!-- 菜单（v0.4.1：悬浮 ⋮ 按钮移除，改由返回手势打开应用菜单） -->
+    <!-- 菜单（v0.4.1：悬浮 ⋮ 按钮移除，改由返回手势打开应用菜单；v0.4.2 拆分登出） -->
     <string name="app_menu_title">应用菜单</string>
     <string name="menu_refresh">刷新</string>
     <string name="menu_pair">重新配对</string>
+    <string name="menu_logout_session">退出当前会话</string>
+    <string name="menu_forget_device">忘记此设备（重新配对）</string>
     <string name="menu_diagnostics">诊断日志</string>
     <string name="menu_about">关于</string>
     <string name="menu_exit_app">退出应用</string>
     <string name="back_gesture_hint">从屏幕边缘向内滑动（返回手势）可打开应用菜单</string>
+
+    <!-- 忘记此设备（v0.4.2） -->
+    <string name="forget_device_title">忘记此设备？</string>
+    <string name="forget_device_message">将删除本机保存的设备凭据、登录会话与该服务器全部 WebView cookie；下次使用必须重新扫描配对二维码。</string>
+    <string name="forget_device_confirm">忘记并清空</string>
+    <string name="forget_device_done">已忘记此设备，请重新扫码配对</string>
 
     <!-- 诊断日志 -->
     <string name="diagnostics_title">诊断日志</string>

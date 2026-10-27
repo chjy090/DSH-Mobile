@@ -28,6 +28,20 @@ object AppConfig {
     const val KEY_AUTH_SESSION_ESTABLISHED = "auth_session_established"
 
     /**
+     * v0.4.2 认证网关：设备凭据是否曾在真实登录中验证成功（用于启动静默续期）。
+     * 与 [KEY_AUTH_SESSION_ESTABLISHED] 不同，这里不随「退出当前会话」清零：
+     * 退出会话只结束服务端 session，下次启动仍可用 deviceToken 自动登录。
+     * 「忘记此设备」/重新配对会随配对信息一起清除。
+     */
+    const val KEY_AUTH_DEVICE_TRUSTED = "auth_device_trusted"
+
+    /** v0.4.2：设备有效期（毫秒时间戳；0 表示未知）。不敏感，仅用于「关于」展示。 */
+    const val KEY_AUTH_DEVICE_EXPIRES_AT = "auth_device_expires_at"
+
+    /** v0.4.2：最近一次成功 renew 的时间（毫秒时间戳；0 表示从未成功），用于前台续期节流。 */
+    const val KEY_AUTH_LAST_RENEW_AT = "auth_last_renew_at"
+
+    /**
      * 把用户输入规范化为 `scheme://authority[/path]`。
      *
      * - 去掉首尾空白；没有 scheme 时补 `http://`

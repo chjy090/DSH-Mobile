@@ -1,6 +1,6 @@
 # DSH Mobile 安装与配置指南
 
-> 适用客户端：**DSH Mobile v0.4.1**（versionCode `8`，applicationId `ai.deepseek.dsh.mobile`）
+> 适用客户端：**DSH Mobile v0.4.2**（versionCode `9`，applicationId `ai.deepseek.dsh.mobile`）
 >
 > 配套服务端：`dsh` + [`dsh-auth-gate`](https://github.com/chjy090/dsh-auth-gate) v0.4.0 及以上。
 > 其中「认证网关模式」的扫码配对、设备令牌与自动续期需要该插件；`publicFingerprint`
@@ -31,7 +31,7 @@
 | CPU 架构 | 发布 APK 含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 原生库；主流 ARM 手机可直接安装 |
 | 系统 WebView | 需要可用的 Android System WebView。App 自身不检查 WebView 版本，但 `dsh` Web GUI 依赖较新的 Chromium；页面异常时先更新 WebView |
 | 存储 | APK 约 25.5 MB；建议至少预留 100 MB |
-| 相机（可选） | 扫码配对需要；无相机仍可安装，但 v0.4.1 无法完成扫码配对（见 §4.2 说明） |
+| 相机（可选） | 扫码配对需要；无相机仍可安装，但 v0.4.2 无法完成扫码配对（见 §4.2 说明） |
 | 麦克风（可选） | 语音输入需要；还要求页面是 `https://` 安全上下文 |
 | Google 服务 | **不需要** Google Play Services；二维码识别使用 bundled ML Kit |
 
@@ -49,7 +49,11 @@
 - 设备数量未达上限（默认最多 8 台，设备有效期默认 90 天）。
 
 > 插件未安装时，App 仍可用旧的直连模式连接普通 `dsh`，但没有扫码配对、证书 pin、
-> 设备令牌自动续期和 App 内「登出」。直连模式详见 §4.7。
+> 设备令牌自动续期和 App 内「退出当前会话 / 忘记此设备」。直连模式详见 §4.7。
+>
+> v0.4.2 起认证网关模式支持**启动静默登录**（冷启动直接进 GUI，不闪登录页）和
+> **前台恢复自动续期**（GUI 已登录且距上次成功续期超过 1 小时，后台换新会话、不刷新页面）；
+> 首次扫码配对仍必须完成网关登录（用户名/密码；TOTP 在生成配对二维码时校验）。
 
 ### 1.3 网络
 
@@ -85,7 +89,7 @@ Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。�
 ### 1.5 开始前检查清单
 
 - [ ] 手机为 Android 8.0+，能安装 APK。
-- [ ] 已取得 `DSH-Mobile-v0.4.1-release.apk`，SHA-256 与 §2.2 一致。
+- [ ] 已取得 `DSH-Mobile-v0.4.2-release.apk`，SHA-256 与 §2.2 一致。
 - [ ] 服务端 `dsh` 与 `dsh-auth-gate` 正常运行。
 - [ ] 手机浏览器能打开 `https://<host>:3443/__auth/login`（自签证书会先提示，属正常）。
 - [ ] 管理页 `/__admin` 已完成初始化，TOTP 可正常生成 6 位验证码。
@@ -100,26 +104,26 @@ Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。�
 
 发布页：
 
-- 版本页：<https://github.com/chjy090/DSH-Mobile/releases/tag/v0.4.1>
+- 版本页：<https://github.com/chjy090/DSH-Mobile/releases/tag/v0.4.2>（由 Lead 验证后发布）
 - APK 直链：
-  <https://github.com/chjy090/DSH-Mobile/releases/download/v0.4.1/DSH-Mobile-v0.4.1-release.apk>
+  <https://github.com/chjy090/DSH-Mobile/releases/download/v0.4.2/DSH-Mobile-v0.4.2-release.apk>
 
-v0.4.1 的 Release 资产：
+v0.4.2 的 Release 资产：
 
 | 文件 | 说明 |
 | --- | --- |
-| `DSH-Mobile-v0.4.1-release.apk` | 签名后的 release APK |
-| `SHA256SUMS-v0.4.1.txt` | APK 的 SHA-256 校验文件 |
-| `release-notes-v0.4.1.md` | 发布说明 |
+| `DSH-Mobile-v0.4.2-release.apk` | 签名后的 release APK |
+| `SHA256SUMS-v0.4.2.txt` | APK 的 SHA-256 校验文件 |
+| `release-notes-v0.4.2.md` | 发布说明 |
 
-当前版本信息（已与发布资产核对）：
+当前构建版本信息（本地 `deliverables/` 与构建产物已核对；GitHub Release 待 Lead 发布）：
 
 | 项目 | 值 |
 | --- | --- |
-| versionName | `0.4.1` |
-| versionCode | `8` |
-| 文件大小 | 25,494,303 字节（约 24.31 MiB） |
-| SHA-256 | `a9ad7979c1487e31b0c55ba374c39aed6e3f5b5990c3421ebf38748838848e80` |
+| versionName | `0.4.2` |
+| versionCode | `9` |
+| 文件大小 | 25,516,087 字节（约 24.33 MiB） |
+| SHA-256 | `1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495` |
 | 签名证书 SHA-256 | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
 
 > 只从上述官方 Release 或你信任的内部渠道获取 APK。不要使用来源不明的“破解版”“去广告版”
@@ -133,27 +137,27 @@ Linux/macOS：
 
 ```bash
 cd ~/Downloads
-sha256sum DSH-Mobile-v0.4.1-release.apk
-# macOS 也可用：shasum -a 256 DSH-Mobile-v0.4.1-release.apk
+sha256sum DSH-Mobile-v0.4.2-release.apk
+# macOS 也可用：shasum -a 256 DSH-Mobile-v0.4.2-release.apk
 ```
 
 期望输出：
 
 ```text
-a9ad7979c1487e31b0c55ba374c39aed6e3f5b5990c3421ebf38748838848e80  DSH-Mobile-v0.4.1-release.apk
+1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495  DSH-Mobile-v0.4.2-release.apk
 ```
 
-如果同时下载了 `SHA256SUMS-v0.4.1.txt`，可在同一目录执行：
+如果同时下载了 `SHA256SUMS-v0.4.2.txt`，可在同一目录执行：
 
 ```bash
-sha256sum -c SHA256SUMS-v0.4.1.txt
-# 期望：DSH-Mobile-v0.4.1-release.apk: OK
+sha256sum -c SHA256SUMS-v0.4.2.txt
+# 期望：DSH-Mobile-v0.4.2-release.apk: OK
 ```
 
 Windows PowerShell：
 
 ```powershell
-Get-FileHash .\DSH-Mobile-v0.4.1-release.apk -Algorithm SHA256
+Get-FileHash .\DSH-Mobile-v0.4.2-release.apk -Algorithm SHA256
 ```
 
 哈希不一致时**不要安装**，重新下载并再次校验。
@@ -165,7 +169,7 @@ Get-FileHash .\DSH-Mobile-v0.4.1-release.apk -Algorithm SHA256
 ```bash
 export ANDROID_HOME=/path/to/android-sdk
 "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-  --verbose --print-certs DSH-Mobile-v0.4.1-release.apk
+  --verbose --print-certs DSH-Mobile-v0.4.2-release.apk
 ```
 
 期望结果包含：
@@ -184,13 +188,13 @@ DSH Mobile，否则会因签名不一致失败；也不要信任该文件。
 
 ```bash
 "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
-  DSH-Mobile-v0.4.1-release.apk | head -n 8
+  DSH-Mobile-v0.4.2-release.apk | head -n 8
 ```
 
 应能看到：
 
 ```text
-package: name='ai.deepseek.dsh.mobile' versionCode='8' versionName='0.4.1' ...
+package: name='ai.deepseek.dsh.mobile' versionCode='9' versionName='0.4.2' ...
 minSdkVersion:'26'
 targetSdkVersion:'35'
 ```
@@ -215,13 +219,13 @@ targetSdkVersion:'35'
 
 ```bash
 adb devices                 # 确认设备已授权
-adb install DSH-Mobile-v0.4.1-release.apk
+adb install DSH-Mobile-v0.4.2-release.apk
 ```
 
 已安装同签名旧版本时，覆盖安装：
 
 ```bash
-adb install -r DSH-Mobile-v0.4.1-release.apk
+adb install -r DSH-Mobile-v0.4.2-release.apk
 ```
 
 安装后确认版本：
@@ -233,11 +237,11 @@ adb shell dumpsys package ai.deepseek.dsh.mobile | grep -E "versionCode|versionN
 期望类似：
 
 ```text
-versionCode=8 minSdk=26 targetSdk=35
-versionName=0.4.1
+versionCode=9 minSdk=26 targetSdk=35
+versionName=0.4.2
 ```
 
-> v0.4.1 的 release APK 使用 v2 签名方案；Android 8.0+ 支持。不要用 `adb install` 安装
+> v0.4.2 的 release APK 使用 v2 签名方案；Android 8.0+ 支持。不要用 `adb install` 安装
 > `app-debug.apk` 去覆盖 release 包，debug 与 release 签名不同，会报
 > `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。
 
@@ -255,8 +259,8 @@ versionName=0.4.1
 
 ### 2.5 versionCode 与 versionName
 
-- `versionName` 是给人看的版本号（`0.4.1`），App「关于」对话框显示的是它。
-- `versionCode` 是给 Android 比较新旧的整数（`8`）。正常安装要求新包的 versionCode
+- `versionName` 是给人看的版本号（`0.4.2`），App「关于」对话框显示的是它。
+- `versionCode` 是给 Android 比较新旧的整数（`9`）。正常安装要求新包的 versionCode
   不低于已安装版本；降级需要显式允许（`adb install -r -d`）。
 - 覆盖升级时 Android 还会校验签名证书一致；versionCode 高但签名不同同样无法安装。
 
@@ -380,7 +384,7 @@ journalctl -u dsh -n 200 --no-pager | grep -iE 'auth-gate|listening|error'
    - 成功后 Toast「配对成功，请登录」；
    - 失败会弹出「配对失败」及错误详情（如 `HTTP 401 · expired_ticket`），见 §8。
 
-> **v0.4.1 没有“从相册选二维码”或“粘贴配对链接”的入口。** 不要用系统相机、微信等
+> **v0.4.2 没有“从相册选二维码”或“粘贴配对链接”的入口。** 不要用系统相机、微信等
 > 扫描二维码：通常只会打开浏览器里的配对页，不会把配置写入 App。必须用 App 内的「扫码配对」。
 > 相机不可用或无法扫码时，只能改用 §4.7 的旧直连模式（且不适用于认证网关），或换一台
 > 能显示二维码的设备。
@@ -438,7 +442,7 @@ https://auth.example.com:8443/__auth/pair#v=1&t=<一次性ticket>&fp=<64位证�
 
 ### 4.5 配对成功的检查
 
-- [ ] App「关于」显示 `0.4.1`。
+- [ ] App「关于」显示 `0.4.2`。
 - [ ] 管理页「设备」出现一条以手机型号命名的设备，平台显示为 `安卓`/`android`。
 - [ ] 登录后能看到 `dsh` Web GUI，而不是停在登录页或错误页。
 - [ ] 返回手势能弹出「应用菜单」。
@@ -468,8 +472,8 @@ https://auth.example.com:8443/__auth/pair#v=1&t=<一次性ticket>&fp=<64位证�
 
 - **fail-open TLS**：证书不受信任时 App 仍会连接，只在页面顶部显示黄色警告条；
   点开可看证书详情，存在中间人风险，只建议在可信网络使用。
-- 没有 deviceToken、没有自动续期、没有 App 内「登出」；`dsh` 重启后入口 token 可能失效，
-  需要重新配对。
+- 没有 deviceToken、没有网关会话自动续期、没有「退出当前会话/忘记此设备」菜单；
+  `dsh` 重启后入口 token 可能失效，需要重新配对。
 - **不能**用直连模式替代认证网关配对：对认证网关直接填地址，登录会返回 `device_required`。
 - 语音输入仍要求 `https://`；`http://` 页面无法调用麦克风。
 
@@ -480,7 +484,12 @@ https://auth.example.com:8443/__auth/pair#v=1&t=<一次性ticket>&fp=<64位证�
 ### 5.1 启动与加载
 
 - 已配对时，启动 App 会直接加载上次的服务器地址。
-- 认证网关模式下，App 会先用保存的证书 pin 预检 `GET /__auth/whoami`：
+- **认证网关模式（v0.4.2）启动静默登录**：如果本机曾成功登录过且 deviceToken 可用，
+  App 会先在后台 `POST /__auth/renew`，成功则注入 Set-Cookie 后直接加载 GUI；
+  期间顶部显示「正在使用设备凭据登录…」，**不会先闪登录页**。
+  - 401/设备失效 → 登录页 + 顶部「设备配对已失效，需要重新扫码配对」；
+  - 网络/TLS 失败 → 登录页 + 顶部可点击重试提示；原生网络错误层的重试也会重试静默登录。
+- 未触发静默登录时，认证网关模式仍会用保存的证书 pin 预检 `GET /__auth/whoami`：
   - 通过 → 加载 GUI；
   - 失败 → 显示「服务器证书已变更，连接已阻止；请重新扫码配对以确认新证书。」
     （注意：网络不可达/超时也会走到同一个错误层，见 §8.4）。
@@ -503,27 +512,38 @@ v0.4.1 移除了 WebView 右上角的悬浮 ⋮ 按钮（v0.4.0 会遮挡 `dsh` 
 | 5 | 以上都不满足 | 弹出「应用菜单」 |
 
 `dsh` 是单页应用（SPA），在根页面通常没有 WebView 历史，所以**每次在根页面按返回都会弹菜单**；
-v0.4.1 不再有“再按一次返回退出”，退出请用菜单里的「退出应用」。
+v0.4.1 起不再有“再按一次返回退出”，退出请用菜单里的「退出应用」。
+
+> v0.4.2 只调整了认证网关模式的菜单项（拆分“退出当前会话/忘记此设备”），
+> 返回手势/返回键状态机与 v0.4.1 完全一致。
 
 > 菜单入口依赖系统返回手势/返回键。如果你在系统设置里关闭了手势导航，或用了会拦截边缘滑动的
 > 手势 App，可能难以呼出菜单；可临时切换为三键导航，或使用系统返回键。App 内没有其他悬浮入口。
 
 ### 5.3 应用菜单各项
 
+认证网关模式（v0.4.2）：
+
 | 菜单项 | 行为 | 是否清数据 |
 | --- | --- | --- |
 | 刷新 | 关闭错误层并重新加载当前页 | 否 |
-| 重新配对 | 清当前服务器的 WebView cookie（含设备绑定）、本地配对 profile 和当前设备令牌，回到配对页 | **是**（见 §7） |
-| 登出（退出登录） | **仅认证网关模式显示**。通过 `POST /__auth/logout` 让服务端删除 session，清 session cookie，回到登录页；保留设备绑定 | 否（保留 deviceToken/设备 cookie） |
+| 退出当前会话 | 通过 `POST /__auth/logout` 让服务端删除 session，清 session cookie，回到登录页；**保留** deviceToken 与设备绑定 cookie | 否（下次冷启动自动登录） |
+| 忘记此设备（重新配对） | 二次确认后删除本机 deviceToken、该 host 全部 WebView cookie（含设备绑定）与配对 profile，回到配对页 | **是**（下次必须重新扫码，见 §7） |
 | 诊断日志 | 打开内存诊断日志，可一键复制 | 否 |
-| 关于 | 显示 App 名称、versionName、包名、Android 版本、当前服务器地址 | 否 |
+| 关于 | 显示 App 名称、versionName、包名、Android 版本、当前服务器地址、设备有效期 | 否 |
 | 退出应用 | 结束当前任务栈（`finishAffinity()`），不卸载、不清数据 | 否 |
+
+直连模式（无认证网关）：刷新 / 重新配对 / 诊断日志 / 关于 / 退出应用；其中「重新配对」
+清 WebView cookie（含设备绑定）、本地配对 profile 和当前设备令牌，回到配对页。
 
 说明：
 
-- 「登出」不是“退出 App”，也不会解除设备绑定；下次登录仍只需用户名 + 密码。
-- 如果登出请求失败/超时（约 4 秒兜底），App 会尽量清理本地 session 并回登录页；
-  若页面仍异常，可用「刷新」或重新配对。
+- 「退出当前会话」不是“退出 App”，也不会解除设备绑定；下次**冷启动**仍会用 deviceToken
+  静默自动登录。当前进程内不会立刻把刚退出的会话建回来。
+- 「忘记此设备」会删除本机凭据；服务端设备记录不会自动消失（可在管理页吊销/等待过期），
+  但本机必须重新扫码才能再次登录。
+- 如果退出会话请求失败/超时（约 4 秒兜底），App 会尽量清理本地 session 并回登录页；
+  若页面仍异常，可用「刷新」或「忘记此设备」。
 - 「退出应用」只结束界面，后台/系统仍可能保留进程；再次打开会重新加载。
 
 ### 5.4 麦克风（语音输入）
@@ -567,21 +587,25 @@ v0.4.1 不再有“再按一次返回退出”，退出请用菜单里的「退�
 
 | 项目 | 默认值 | 行为 |
 | --- | --- | --- |
-| 登录会话 | 8 小时 | 过期后 App 自动用 deviceToken 续期 |
+| 登录会话 | 8 小时 | 过期后 App 自动用 deviceToken 续期（v0.4.2 前台每 ≥1 小时也会主动刷新） |
 | 设备绑定 | 90 天 | 到期后 deviceToken 失效，必须重新扫码配对 |
 | 设备数量 | 8 台 | 超过后配对返回 `device_limit`，需先吊销旧设备 |
 | 配对票据 | 120 秒 | 一次性，过期需重新生成 |
 | 登录失败锁 | 15 分钟内 5 次失败，锁 15 分钟 | 返回 `rate_limited` |
 
-自动续期流程：
+自动续期流程（v0.4.2）：
 
-1. 主文档返回 401，或加载到 `/__auth/login` 且本机曾成功登录过；
-2. App 在后台用 deviceToken 调用 `POST /__auth/renew`（TLS 走保存的证书 pin）；
-3. 成功 → 注入新的 session cookie → reload（或直接打开原目标页）；
-4. 失败 → 回登录页，用用户名 + 密码重新登录；
+1. **冷启动**：曾登录过且 deviceToken 可用 → 后台 `POST /__auth/renew` → 成功注入 cookie
+   → 直接加载 GUI（不闪登录页）；失败按 401/网络错误分别提示并回登录页。
+2. **前台恢复**：GUI 已登录且距上次成功 renew 超过 1 小时 → 后台续期，更新 cookie 与
+   服务端可选返回的 `deviceExpiresAt`，**不刷新页面**；401 时下一次前台/导航回登录页。
+3. **会话过期兜底**：主文档 401，或加载到 `/__auth/login` 且本机曾成功登录过 → 后台续期；
+   成功 → 注入新 session cookie → reload（或直接打开原目标页）。
+4. **失败**：回登录页；401/`device_required`/`origin_changed` 会明确提示需要重新扫码配对。
 5. 如果 deviceToken 过期/被吊销/`origin_changed`，登录页也会继续报错，需要重新配对。
 
 > 续期只延长**会话**，不会延长 90 天的**设备**有效期。设备到期/被吊销后必须重新扫码。
+> v0.4.2 的「关于」会显示「设备有效期至：yyyy-MM-dd HH:mm」；服务端未返回时显示「—」。
 
 ### 5.9 断网、后台与进程回收
 
@@ -770,18 +794,21 @@ openssl s_client -connect auth.example.com:8443 -servername auth.example.com </d
 
 ---
 
-## 7. 重新配对、登出、换服务器与清数据
+## 7. 重新配对、退出会话、换服务器与清数据
 
-### 7.1 应用菜单「重新配对」
+### 7.1 应用菜单「忘记此设备（重新配对）」
 
-入口：返回手势/返回键 →「应用菜单」→「重新配对」。
+认证网关模式入口：返回手势/返回键 →「应用菜单」→「忘记此设备（重新配对）」，
+会先弹出二次确认。直连模式对应旧菜单项「重新配对」。
 
-它会：
+确认后会：
 
-- 清除**当前服务器**的 WebView Cookie（包括 `dsh_gate_device` 设备绑定和 session）；
-- 清除本地配对信息：服务器地址、证书 pin、认证网关标记、首次登录标记、旧直连 token；
-- 删除当前 `host:port` 对应的加密 deviceToken；
-- 重置续期/登出状态，回到「连接 DSH Host」配对页。
+- 删除当前 `host:port` 对应的加密 deviceToken（`DeviceTokenStore.clear`）；
+- 清除**当前服务器**的 WebView Cookie（包括 `dsh_gate_device` 设备绑定和 session，
+  `keepDeviceCookie = false`）；
+- 清除本地配对信息：服务器地址、证书 pin、认证网关标记、首次登录/设备可信标记、
+  设备有效期、旧直连 token；
+- 重置续期/退出状态，回到「连接 DSH Host」配对页。
 
 它**不会**：
 
@@ -793,35 +820,40 @@ openssl s_client -connect auth.example.com:8443 -servername auth.example.com </d
 
 - 同一台手机重新配对后，管理页可能出现一条新设备记录，旧记录不会自动消失；
   反复重配可能占满 8 台，需要到「设备」tab 手动「吊销」旧记录。
-- 重新配对后必须重新做用户名 + 密码登录（即使旧 session 还在，App 已清掉本地 Cookie）。
+- 重新配对后必须重新完成网关登录（用户名 + 密码；即使旧 session 还在，App 已清掉本地 Cookie）。
+- **v0.4.2 起「忘记此设备」是唯一会删除本机设备凭据的菜单项**；只想结束当前登录会话请用
+  下一节的「退出当前会话」。
 
-### 7.2 应用菜单「登出」
+### 7.2 应用菜单「退出当前会话」
 
 仅在认证网关模式显示。行为：
 
 1. 通过 WebView `POST /__auth/logout` 让服务端删除当前 session；
 2. 清除 WebView 里的 session cookie；
 3. 保留 `dsh_gate_device` 设备绑定 cookie 和本地 deviceToken；
-4. 回到登录页，下次只需用户名 + 密码。
+4. 回到登录页；**下次冷启动 App 会用 deviceToken 静默 renew 自动登录**
+   （v0.4.2；当前进程内不会立刻把刚退出的会话建回来）。
 
 注意：
 
-- 「登出」不会解除设备绑定，也不会让设备从管理页消失；
-- 如果登出请求失败，App 会用约 4 秒超时兜底回登录页；
-- 如果之后登录报 `device_required`，说明设备 cookie 已丢失/被吊销，需要重新扫码。
+- 「退出当前会话」不是“退出 App”，也不会解除设备绑定/让设备从管理页消失；
+- 如果退出请求失败，App 会用约 4 秒超时兜底回登录页；
+- 如果之后登录报 `device_required`，说明设备 cookie 已丢失/被吊销，需要「忘记此设备」后
+  重新扫码；
+- 如果你要的是“这台手机以后必须重新扫码”，请用「忘记此设备」。
 
 ### 7.3 更换服务器
 
 App 同一时间只保存一个配对。更换服务器最稳妥的步骤：
 
 1. 在新服务器管理页生成配对二维码；
-2. 在 App 里「应用菜单」→「重新配对」（清掉旧服务器本地配置）；
+2. 在 App 里「应用菜单」→「忘记此设备（重新配对）」（清掉旧服务器本地配置）；
 3. 用新服务器二维码扫码配对；
-4. 用新服务器用户名 + 密码登录；
+4. 用新服务器用户名 + 密码完成登录；
 5. 回到旧服务器管理页，吊销这台手机的旧设备记录（如果不再使用）。
 
-如果 App 当前已经是未配对状态，也可以直接扫码；但只要还有旧配对，就必须先「重新配对」
-回到配对页。旧服务器的设备记录仍会保留，且本地历史 token 可能残留，建议先「重新配对」。
+如果 App 当前已经是未配对状态，也可以直接扫码；但只要还有旧配对，就必须先「忘记此设备」
+回到配对页。旧服务器的设备记录仍会保留，且本地历史 token 可能残留，建议先清理。
 
 ### 7.4 服务端吊销设备（手机丢失/不再使用）
 
@@ -863,8 +895,8 @@ adb shell pm clear ai.deepseek.dsh.mobile
 
 | 操作 | 本地配对/profile | 本地设备令牌 | WebView 设备 cookie | 服务端设备记录 | 服务端 session |
 | --- | --- | --- | --- | --- | --- |
-| 应用菜单「重新配对」 | 清除当前 | 删除当前 host | 清除 | **保留** | 保留到过期 |
-| 应用菜单「登出」 | 保留 | 保留 | 保留 `dsh_gate_device`，清 session | 保留 | 删除当前 |
+| 应用菜单「忘记此设备」 | 清除当前 | 删除当前 host | 清除（含设备绑定） | **保留** | 保留到过期 |
+| 应用菜单「退出当前会话」 | 保留 | 保留 | 保留 `dsh_gate_device`，清 session | 保留 | 删除当前 |
 | 系统「清除数据」/卸载 | 全部清除 | 全部清除 | 清除 | **保留** | 保留到过期 |
 | 管理页「吊销设备」 | 不变 | 不变（但已失效） | 不变（但服务端拒绝） | 删除该设备 | 该设备全部失效 |
 | 服务端改密码/重置 TOTP | 不变 | 不变（但已失效） | 不变 | **全部删除** | 全部失效 |
@@ -988,7 +1020,7 @@ App 内：
 - 来源包括 WebView console、JS 桥、TLS pin、下载等；
 - 写入时会对 URL 中的 `token=` 参数做 `<REDACTED>` 脱敏；
 - **不会自动附带** App 版本、设备型号、服务端版本；请在反馈时另附「关于」里的
-  versionName（`0.4.1`）和 Android 版本；
+  versionName（`0.4.2`）和 Android 版本；
 - 日志可能仍包含服务器地址、页面片段、错误堆栈；发送前请自行检查，
   **不要**附带密码、TOTP、deviceToken、Cookie、配对二维码或截图。
 
@@ -1032,8 +1064,8 @@ adb logcat -s DSHMobile DSHAuthGate DSHQrScan DSHDeviceToken
    不要存公共相册；怀疑泄露就重新生成（旧 ticket 过期作废）。
 6. **TOTP 与密码分开保管**。TOTP 只用于管理页生成配对二维码；登录只需用户名 + 密码。
    不要用弱密码；服务端要求至少 10 位。
-7. **App 的「退出应用」不等于登出**：它只结束界面。共享设备上请用「登出」或
-   「重新配对」/清除数据。
+7. **App 的「退出应用」不等于退出登录**：它只结束界面。共享设备上请用「退出当前会话」或
+   「忘记此设备」/清除数据；只想下次仍自动登录时用「退出当前会话」。
 8. **证书 pin 是 leaf SHA-256**：换证书/换代理证书后必须重新配对；不要通过安装未知 CA、
    关闭校验或改用直连 fail-open 来“绕过”证书错误。
 9. **直连模式 fail-open 有 MITM 风险**：证书不受信任时仍会连接，只显示警告条。不可信网络
@@ -1052,8 +1084,19 @@ adb logcat -s DSHMobile DSHAuthGate DSHQrScan DSHDeviceToken
 
 | 版本 | versionCode | APK | SHA-256 | 签名证书 SHA-256 |
 | --- | --- | --- | --- | --- |
-| v0.4.1（当前） | 8 | `DSH-Mobile-v0.4.1-release.apk` | `a9ad7979c1487e31b0c55ba374c39aed6e3f5b5990c3421ebf38748838848e80` | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
+| v0.4.2（当前） | 9 | `DSH-Mobile-v0.4.2-release.apk` | `1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495` | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
+| v0.4.1 | 8 | `DSH-Mobile-v0.4.1-release.apk` | `a9ad7979c1487e31b0c55ba374c39aed6e3f5b5990c3421ebf38748838848e80` | 同上 |
 | v0.4.0 | 7 | `DSH-Mobile-v0.4.0-release.apk` | `5d19e16e9445fc54e94f82ba1e89f356ceed03df71c7dbc726847b16c35552c5` | 同上 |
+
+v0.4.1 → v0.4.2 的主要变化：
+
+- 认证网关模式冷启动静默登录：用 deviceToken 换会话后直接加载 GUI，不闪登录页；
+- 前台恢复自动续期（距上次成功 renew ≥1 小时，不刷新页面）；401 下次前台/导航回登录页；
+- 菜单拆分：「退出当前会话」（保留设备凭据，下次冷启动自动登录）与
+  「忘记此设备（重新配对）」（删除本机 deviceToken/cookie/profile，必须重新扫码）；
+- 「关于」显示设备有效期至（服务端未返回时「—」）；
+- 版本号 `0.4.2` / versionCode `9`；
+- 首次扫码配对后仍必须完成网关登录；直连模式与返回手势状态机不变。
 
 v0.4.0 → v0.4.1 的主要变化：
 
@@ -1067,17 +1110,17 @@ v0.4.0 → v0.4.1 的主要变化：
 
 ### 10.2 覆盖升级
 
-同签名（官方 v0.4.0 → v0.4.1）：
+同签名（官方 v0.4.1 → v0.4.2，或 v0.4.0 → v0.4.2）：
 
 1. 下载并校验新 APK（§2.2）。
 2. 点击安装，系统显示「更新」；或：
 
    ```bash
-   adb install -r DSH-Mobile-v0.4.1-release.apk
+   adb install -r DSH-Mobile-v0.4.2-release.apk
    ```
 
 3. 数据保留：服务器地址、pin、加密 deviceToken、WebView Cookie 均保留；升级后无需重新配对。
-4. 打开 App →「关于」确认版本为 `0.4.1`；试一次返回手势菜单。
+4. 打开 App →「关于」确认版本为 `0.4.2`；已登录过的网关设备应静默进入 GUI，再试一次返回手势菜单。
 
 ### 10.3 回滚到旧版本
 
@@ -1088,7 +1131,7 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 ```
 
 - `-d` 允许 versionCode 降低；仍需签名一致。
-- 一般保留数据；v0.4.0/v0.4.1 的配对数据结构一致。
+- 一般保留数据；v0.4.0/v0.4.1/v0.4.2 的配对数据结构兼容（v0.4.2 只新增非敏感的可选标记）。
 - 部分厂商系统/安装器可能仍拒绝降级；此时只能卸载后安装（会清数据，需重新配对）。
 - 回滚前建议确认新版本问题是否与 App 有关（也可能是服务端/网络），并记录配对信息。
 
@@ -1096,9 +1139,11 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 
 ### 10.4 升级后检查
 
-- [ ] 「关于」显示 `0.4.1`。
-- [ ] 打开后直接进入 GUI，未要求重新配对（同签名覆盖正常）。
-- [ ] 返回手势/返回键能弹出菜单（v0.4.1 没有悬浮 ⋮）。
+- [ ] 「关于」显示 `0.4.2`；认证网关模式还会显示「设备有效期至：…」或「—」。
+- [ ] 打开后直接进入 GUI，未要求重新配对/登录（同签名覆盖正常；首次配对设备除外）。
+- [ ] 返回手势/返回键能弹出菜单（无悬浮 ⋮）。
+- [ ] 认证网关模式菜单包含「退出当前会话」「忘记此设备（重新配对）」；
+      直连模式保持「重新配对」。
 - [ ] 语音/下载/剪贴板按需可用。
 - [ ] 若提示 `CERT_CHANGED`，检查是否在升级期间更换了证书/代理（见 §6.3）。
 
@@ -1214,7 +1259,7 @@ sha256sum app/build/outputs/apk/release/app-release.apk
 | 配对二维码路径 | `/__auth/pair#v=1&t=...&fp=...` | 一次性 |
 | 登录页 | `/__auth/login` | 经网关 |
 | 续期接口 | `POST /__auth/renew` | App 原生调用 |
-| 登出接口 | `POST /__auth/logout` | App WebView 调用 |
+| 退出当前会话接口 | `POST /__auth/logout` | App WebView 调用（保留设备凭据） |
 
 ## 附录 B：错误码速查
 
@@ -1245,11 +1290,11 @@ sha256sum app/build/outputs/apk/release/app-release.apk
 
 ## 文档核对说明
 
-- 本文按 DSH Mobile v0.4.1 源码（`MainActivity`、`WebHost`、`AuthGateClient`、`CertPin`、
+- 本文按 DSH Mobile v0.4.2 源码（`MainActivity`、`WebHost`、`AuthGateClient`、`CertPin`、
   `DeviceTokenStore`、`QrPairPayload`、`QrScanActivity`、`SessionStore`、`Downloader`、
   `Diagnostics`）与 `dsh-auth-gate` v0.6.2 源码/README 核对。
 - APK 的 SHA-256、签名证书、versionCode 与 ABI 已在构建机用 `sha256sum`、`apksigner`、
   `aapt2` 核对；真机上的权限弹窗、厂商设置路径和返回手势行为可能因 Android 版本/OEM 不同，
   请按实际界面操作。
-- App 的配对、登录、续期、登出、菜单和证书 pin 行为以本仓库当前源码为准；服务端行为
+- App 的配对、登录、启动静默登录、前台续期、退出会话/忘记设备、菜单和证书 pin 行为以本仓库当前源码为准；服务端行为
   （TOTP、设备有效期、限流、`origin_changed`）以 `dsh-auth-gate` 版本为准。
