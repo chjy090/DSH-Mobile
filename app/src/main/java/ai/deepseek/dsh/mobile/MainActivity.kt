@@ -3,6 +3,7 @@ package ai.deepseek.dsh.mobile
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentResolver
@@ -46,6 +47,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -54,6 +56,7 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -1822,6 +1825,9 @@ class MainActivity : ComponentActivity() {
         val labels = mutableListOf<CharSequence>()
         actions += MENU_REFRESH
         labels += getString(R.string.menu_refresh)
+        // v0.4.5：认证网关与直连模式都显示「最近下载」（本地历史兜底，不依赖 ROM「最近」）。
+        actions += MENU_DOWNLOADS
+        labels += getString(R.string.menu_download_history)
         if (session.authGate) {
             // 两项语义不同：前者只结束 session，后者删除设备凭据（必须重新扫码）。
             actions += MENU_LOGOUT_SESSION
@@ -1869,6 +1875,7 @@ class MainActivity : ComponentActivity() {
                 dismissError()
                 host?.reload()
             }
+            MENU_DOWNLOADS -> showDownloadHistory()
             MENU_PAIR -> pairAgain()
             MENU_LOGOUT_SESSION -> logout()
             MENU_FORGET_DEVICE -> confirmForgetDevice()
@@ -1893,6 +1900,159 @@ class MainActivity : ComponentActivity() {
             Log.w(TAG, "dismiss app menu failed", t)
         }
         return true
+    }
+
+    // ------------------------------------------------- 最近下载（v0.4.5）
+
+    /**
+     * 应用内「最近下载」：作为 OEM 文件管理器「最近」不显示任意文档时的可靠兜底。
+     *
+     * 列表来自 [DownloadHistory]（最多 50 条，最新在前），只显示文件名与保存时间；
+     * 点击用 ACTION_VIEW 打开（Android 10+ MediaStore content Uri，Android 8/9 FileProvider），
+     * 底部「清除记录」只清历史，不删除任何文件。
+     */
+    private fun showDownloadHistory() {
+        if (isFinishing || isDestroyed) return
+        val entries = DownloadHistory.load(this)
+        if (entries.isEmpty()) {
+            try {
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.menu_download_history)
+                    .setMessage(R.string.download_history_empty)
+                    .setPositiveButton(R.string.download_done, null)
+                    .show()
+            } catch (t: Throwable) {
+                Log.w(TAG, "show empty download history failed", t)
+                toastSafely(getString(R.string.download_history_empty))
+            }
+            return
+        }
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val labels = entries.map { entry ->
+            val time = if (entry.savedAt > 0L) {
+                try {
+                    formatter.format(Date(entry.savedAt))
+                } catch (t: Throwable) {
+                    getString(R.string.value_unknown)
+                }
+            } else {
+                getString(R.string.value_unknown)
+            }
+            getString(R.string.download_history_item, entry.displayName, time)
+        }.toTypedArray()
+
+        try {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.menu_download_history)
+                .setItems(labels) { _, which ->
+                    entries.getOrNull(which)?.let { openDownloadHistoryEntry(it) }
+                }
+                .setNegativeButton(R.string.download_history_clear) { _, _ ->
+                    confirmClearDownloadHistory()
+                }
+                .setPositiveButton(R.string.download_done, null)
+                .show()
+        } catch (t: Throwable) {
+            Log.w(TAG, "show download history failed", t)
+            toastSafely(getString(R.string.download_history_empty))
+        }
+    }
+
+    /** 清除历史前二次确认：只清列表，不删文件。 */
+    private fun confirmClearDownloadHistory() {
+        if (isFinishing || isDestroyed) return
+        try {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.download_history_clear_title)
+                .setMessage(R.string.download_history_clear_message)
+                .setPositiveButton(R.string.download_history_clear) { _, _ ->
+                    DownloadHistory.clear(this)
+                    toastSafely(getString(R.string.download_history_cleared))
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        } catch (t: Throwable) {
+            Log.w(TAG, "show clear download history confirm failed", t)
+        }
+    }
+
+    /**
+     * 打开一条历史记录。打开前先验证 Uri 可读（文件可能被用户移动/删除），
+     * 失败只 Toast 说明原因，不崩溃、不申请额外权限。
+     */
+    private fun openDownloadHistoryEntry(entry: DownloadHistory.Entry) {
+        val uri = try {
+            resolveDownloadHistoryUri(entry)
+        } catch (t: Throwable) {
+            Log.w(TAG, "resolve download history uri failed: ${t.javaClass.simpleName}")
+            null
+        }
+        if (uri == null) {
+            toastSafely(getString(R.string.download_history_open_failed, entry.displayName))
+            return
+        }
+        if (!canReadDownloadHistoryUri(uri)) {
+            toastSafely(getString(R.string.download_history_open_failed, entry.displayName))
+            return
+        }
+
+        val mime = entry.mime
+            .takeIf { it.contains('/') && it != "application/octet-stream" }
+            ?: try {
+                contentResolver.getType(uri)?.takeIf { it.contains('/') }
+            } catch (t: Throwable) {
+                null
+            }
+            ?: "*/*"
+
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, mime)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            )
+        } catch (t: ActivityNotFoundException) {
+            Log.w(TAG, "no activity to open download history file")
+            toastSafely(getString(R.string.download_history_open_failed, entry.displayName))
+        } catch (t: Throwable) {
+            Log.w(TAG, "open download history file failed: ${t.javaClass.simpleName}")
+            toastSafely(getString(R.string.download_history_open_failed, entry.displayName))
+        }
+    }
+
+    /**
+     * Android 10+ 直接用 MediaStore content Uri；Android 8/9 用 FileProvider 把
+     * 公共 Download 绝对路径转成临时可授予的 content Uri（不再直接用 file://，
+     * 避免 FileUriExposedException）。
+     */
+    private fun resolveDownloadHistoryUri(entry: DownloadHistory.Entry): Uri? {
+        entry.contentUri?.takeIf { it.isNotBlank() }?.let { return Uri.parse(it) }
+        val path = entry.legacyPath?.takeIf { it.isNotBlank() } ?: return null
+        if (!path.startsWith("/")) return null
+        val file = File(path)
+        if (!file.isFile) return null
+        return FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+    }
+
+    /** 只做一次只读打开验证，避免把已删除/无权限的 Uri 交给第三方应用。 */
+    private fun canReadDownloadHistoryUri(uri: Uri): Boolean {
+        return try {
+            contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false
+        } catch (t: Throwable) {
+            Log.w(TAG, "download history uri is not readable: ${t.javaClass.simpleName}")
+            false
+        }
+    }
+
+    private fun toastSafely(message: String) {
+        if (isFinishing || isDestroyed) return
+        try {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        } catch (t: Throwable) {
+            Log.w(TAG, "show toast failed", t)
+        }
     }
 
     /** 退出应用：结束本任务栈里的所有 Activity（不卸载、不清数据）。 */
@@ -2159,9 +2319,9 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun showAbout() {
         val versionName = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.4"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.5"
         } catch (t: Throwable) {
-            "0.4.4"
+            "0.4.5"
         }
 
         // v0.4.3：版本号 TextView 是「直连模式」隐藏入口（连续点击 7 次解锁/锁定）；
@@ -2690,6 +2850,7 @@ class MainActivity : ComponentActivity() {
         const val MENU_LOGOUT_SESSION = 5
         const val MENU_EXIT = 6
         const val MENU_FORGET_DEVICE = 7
+        const val MENU_DOWNLOADS = 8
 
         /**
          * v0.4.2：本进程内刚「退出当前会话」后，抑制 Activity 重建（如旋转）时的启动

@@ -38,6 +38,24 @@ import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
 /**
+ * 一次成功下载的结果（v0.4.5）。
+ *
+ * [contentUri]：Android 10+ MediaStore 实际集合返回的 Uri（图片/视频/音频/下载集合之一）；
+ * [legacyPath]：Android 8/9 公共 `Download/` 下的绝对路径（可空）。
+ * 两者都用于「最近下载」历史与打开入口；[mimeType]/[sizeBytes] 直接来自本次下载，
+ * 避免历史记录再查一次 MediaStore。
+ */
+data class DownloadResult(
+    val savedName: String,
+    val contentUri: Uri?,
+    val legacyPath: String?,
+    val mimeType: String,
+    val sizeBytes: Long,
+    /** 实际落盘目录（带尾斜杠），如 `Pictures/`、`Movies/`、`Music/`、`Download/`。 */
+    val savedDirectory: String
+)
+
+/**
  * App 内自带的下载器（v0.2.1 起替代系统下载服务）。
  *
  * 为什么不使用系统下载服务：它运行在系统进程，读不到 App 的
@@ -116,8 +134,9 @@ object Downloader {
      * @param cookieHeader 当前 WebView 对 [url] 的 Cookie（可空）
      * @param onStarted 连接成功、开始写盘后回调（主线程）
      * @param onFailed 失败回调，[reason] 已脱敏并可安全写日志（主线程）
-     * @param onDone 写完并落到系统 Download 目录后回调（主线程），[savedName] 为
-     *   磁盘/MediaStore 上的**最终名字**；[contentUri] 仅在 API 29+ 可打开时为非空
+     * @param onDone 写完并落到系统媒体库/下载目录后回调（主线程），携带最终名字、
+     *   MediaStore content Uri（API 29+）或公共 Download 绝对路径（API 26–28），
+     *   以及本次下载的 MIME 与字节数，供「最近下载」历史与打开入口使用
      */
     fun download(
         activity: ComponentActivity,
@@ -128,7 +147,7 @@ object Downloader {
         cookieHeader: String?,
         onStarted: () -> Unit,
         onFailed: (reason: String) -> Unit,
-        onDone: (savedName: String, contentUri: Uri?) -> Unit
+        onDone: (result: DownloadResult) -> Unit
     ) {
         val appContext = activity.applicationContext
         Thread({
@@ -172,7 +191,7 @@ object Downloader {
         suppliedMimeType: String?,
         cookieHeader: String?,
         onStarted: () -> Unit,
-        onDone: (savedName: String, contentUri: Uri?) -> Unit
+        onDone: (result: DownloadResult) -> Unit
     ) {
         var connection: HttpURLConnection? = null
         var input: InputStream? = null
@@ -197,13 +216,27 @@ object Downloader {
                 prefix = prefix
             )
             val requestedName = buildDownloadName(rawName, mimeType)
+            // v0.4.5：Android 10+ 按 MIME 分流到图片/视频/音频集合（Pictures/Movies/Music），
+            // 其它文档仍进 Downloads/Download；API 26–28 统一落公共 Download（稍后媒体扫描）。
+            val mediaTarget = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                resolveMediaTarget(mimeType)
+            } else {
+                null
+            }
             // 定名 + 查重必须串行：同名并发下载在这里占位，后到的按 (1)、(2) 递增。
-            val fileName = allocateUniqueName(context, requestedName)
+            // 查重必须查“本次将写入的那个集合与目录”，不能只看 Downloads。
+            val fileName = allocateUniqueName(context, requestedName, mediaTarget)
             reservedName = fileName
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // API 29+：MediaStore.Downloads，写入公共 Download 目录且无需存储权限。
-                val uri = insertPendingDownload(context.contentResolver, fileName, mimeType)
+                // API 29+：写入 MIME 对应的 MediaStore 集合，无需存储权限。
+                val target = mediaTarget ?: throw DownloadException("missing media target")
+                val uri = insertPendingDownload(
+                    context.contentResolver,
+                    fileName,
+                    mimeType,
+                    target
+                )
                 pendingUri = uri
                 output = context.contentResolver.openOutputStream(uri, "w")
                     ?: throw DownloadException("openOutputStream returned null")
@@ -234,19 +267,46 @@ object Downloader {
                 val pending = pendingUri ?: throw DownloadException("missing pending uri")
                 // 最终名字以 MediaStore 实际 DISPLAY_NAME 为准（系统可能因并发重名自动改名），
                 // 保证 onDone 与用户在文件管理器里看到的名字一致。
+                val target = mediaTarget ?: throw DownloadException("missing media target")
                 val actualName = finalizePendingDownload(
                     context.contentResolver,
                     pending,
-                    written
+                    written,
+                    target
                 ) ?: fileName
+                // v0.4.5 额外索引尝试：Q+ 若能查到 DATA 绝对路径则补一次媒体扫描；
+                // 查不到/失败只记日志，不影响已完成的下载。
+                tryScanDownloadedFile(context, pending)
                 pendingUri = null
-                post { onDone(actualName, pending) }
+                post {
+                    onDone(
+                        DownloadResult(
+                            savedName = actualName,
+                            contentUri = pending,
+                            legacyPath = null,
+                            mimeType = mimeType,
+                            sizeBytes = written,
+                            savedDirectory = target.relativePath
+                        )
+                    )
+                }
             } else {
                 val saved = legacyFile ?: throw DownloadException("missing destination file")
                 saved.setLastModified(System.currentTimeMillis())
                 legacyFile = null
                 scanLegacyDownload(context, saved, mimeType)
-                post { onDone(fileName, null) }
+                post {
+                    onDone(
+                        DownloadResult(
+                            savedName = fileName,
+                            contentUri = null,
+                            legacyPath = saved.absolutePath,
+                            mimeType = mimeType,
+                            sizeBytes = written,
+                            savedDirectory = "${Environment.DIRECTORY_DOWNLOADS}/"
+                        )
+                    )
+                }
             }
 
             completed = true
@@ -485,17 +545,50 @@ object Downloader {
 
     // ---------------------------------------------------------------- 落盘
 
+    /**
+     * Android 10+ 的写入目标：MIME 决定集合与相对目录（v0.4.5）。
+     *
+     * 图片 → Images/Pictures/、视频 → Video/Movies/、音频 → Audio/Music/，
+     * 其它（文档/归档/apk/未知）→ Downloads/Download/。
+     * 文件名、去重、日期/大小、IS_PENDING 与 notifyChange 逻辑在各集合间完全复用。
+     */
+    private data class MediaTarget(val collectionUri: Uri, val relativePath: String)
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun resolveMediaTarget(mimeType: String): MediaTarget {
+        val mime = normalizeMimeType(mimeType) ?: OCTET_STREAM
+        return when {
+            mime.startsWith("image/") -> MediaTarget(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                "${Environment.DIRECTORY_PICTURES}/"
+            )
+            mime.startsWith("video/") -> MediaTarget(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                "${Environment.DIRECTORY_MOVIES}/"
+            )
+            mime.startsWith("audio/") -> MediaTarget(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                "${Environment.DIRECTORY_MUSIC}/"
+            )
+            else -> MediaTarget(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                "${Environment.DIRECTORY_DOWNLOADS}/"
+            )
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun insertPendingDownload(
         resolver: ContentResolver,
         fileName: String,
-        mimeType: String
+        mimeType: String,
+        target: MediaTarget
     ): Uri {
         val nowSeconds = System.currentTimeMillis() / 1000L
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, target.relativePath)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
             // MediaStore 的 DATE_ADDED / DATE_MODIFIED 单位是「秒」（官方列定义，
             // 不是毫秒）。补上后「文件 → 最近」与按时间排序的视图才能拿到正确时间。
@@ -505,7 +598,7 @@ object Downloader {
             put(MediaStore.MediaColumns.SIZE, 0L)
         }
         val inserted = try {
-            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            resolver.insert(target.collectionUri, values)
         } catch (t: Throwable) {
             // 个别 OEM 对插入时的 DATE_*/SIZE 较严格：退回最小字段重试，保证可下载。
             Log.w(TAG, "MediaStore insert with metadata failed, retrying minimal", t)
@@ -516,11 +609,11 @@ object Downloader {
         val minimal = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, target.relativePath)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         return try {
-            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, minimal)
+            resolver.insert(target.collectionUri, minimal)
                 ?: throw DownloadException("MediaStore insert returned null")
         } catch (t: Throwable) {
             if (t is DownloadException) throw t
@@ -539,7 +632,8 @@ object Downloader {
     private fun finalizePendingDownload(
         resolver: ContentResolver,
         uri: Uri,
-        sizeBytes: Long
+        sizeBytes: Long,
+        target: MediaTarget
     ): String? {
         val nowSeconds = System.currentTimeMillis() / 1000L
         val displayName = queryMediaStoreString(
@@ -576,28 +670,59 @@ object Downloader {
         if (updated <= 0) {
             throw DownloadException("MediaStore finalize failed")
         }
-        notifyDownloadChanged(resolver, uri)
+        notifyDownloadChanged(resolver, uri, target.collectionUri)
         return displayName
     }
 
     /**
-     * 主动通知索引刷新：既通知本条记录，也通知整个 Downloads 集合。
-     *
-     * API 29+ 不再额外调用 [MediaScannerConnection.scanFile]：在 scoped storage 下
-     * 公共 Download 目录的绝对路径不保证可读，冗余扫描既不可靠又可能拖慢收尾；
-     * MediaStore 记录 + notifyChange 才是「文件 → 最近/下载」的数据源。
+     * 主动通知索引刷新：既通知本条记录，也通知它实际所在的媒体集合
+     * （Images/Video/Audio/Downloads，v0.4.5 起不再固定通知 Downloads）。
      */
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun notifyDownloadChanged(resolver: ContentResolver, uri: Uri) {
+    private fun notifyDownloadChanged(
+        resolver: ContentResolver,
+        uri: Uri,
+        collectionUri: Uri
+    ) {
         try {
             resolver.notifyChange(uri, null)
         } catch (t: Throwable) {
             Log.w(TAG, "notifyChange download uri failed", t)
         }
         try {
-            resolver.notifyChange(MediaStore.Downloads.EXTERNAL_CONTENT_URI, null)
+            resolver.notifyChange(collectionUri, null)
         } catch (t: Throwable) {
-            Log.w(TAG, "notifyChange downloads collection failed", t)
+            Log.w(TAG, "notifyChange media collection failed", t)
+        }
+    }
+
+    /**
+     * v0.4.5：Q+ 收尾时额外尝试一次媒体扫描（可选、低成本）。
+     *
+     * scoped storage 下 `DATA` 已 deprecated 且不保证可读：只有查到非空绝对路径才调用
+     * [MediaScannerConnection.scanFile]，否则直接跳过。扫描失败/无回调只写日志，
+     * 不影响下载结果（MediaStore 记录 + notifyChange 仍是主路径）。
+     */
+    @RequiresApi(Build.VERSION_CODES.Q)
+    @Suppress("DEPRECATION")
+    private fun tryScanDownloadedFile(context: Context, uri: Uri) {
+        val path = queryMediaStoreString(
+            context.contentResolver,
+            uri,
+            MediaStore.MediaColumns.DATA
+        )
+        if (path.isNullOrBlank() || !path.startsWith("/")) {
+            Log.d(TAG, "supplemental media scan skipped: no absolute path")
+            return
+        }
+        try {
+            MediaScannerConnection.scanFile(context, arrayOf(path), null) { _, scannedUri ->
+                if (scannedUri == null) {
+                    Log.d(TAG, "supplemental media scan returned no uri")
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "supplemental media scan failed", t)
         }
     }
 
@@ -748,9 +873,14 @@ object Downloader {
      * 分配唯一名字：`name.ext` → `name (1).ext` → `name (2).ext` …
      *
      * 串行化 + [generatedNames] 占位防止同进程并发下载同时算中同一个名字；
-     * 磁盘（API 26–28）或 MediaStore（API 29+）上已存在的名字也会跳过。
+     * 磁盘（API 26–28）或目标 MediaStore 集合（API 29+）上已存在的名字也会跳过。
+     * Android 10+ 必须按本次 MIME 对应的集合/目录查重（v0.4.5），不能只看 Downloads。
      */
-    private fun allocateUniqueName(context: Context, requestedName: String): String {
+    private fun allocateUniqueName(
+        context: Context,
+        requestedName: String,
+        mediaTarget: MediaTarget?
+    ): String {
         val (base, extension) = splitName(requestedName)
         val trimmedBase = base.trimEnd(' ', '.')
         synchronized(generatedNames) {
@@ -765,7 +895,7 @@ object Downloader {
                     )
                 }
                 if (!generatedNames.contains(candidate) &&
-                    !downloadNameExists(context, candidate)
+                    !downloadNameExists(context, candidate, mediaTarget)
                 ) {
                     generatedNames.add(candidate)
                     return candidate
@@ -783,9 +913,14 @@ object Downloader {
         }
     }
 
-    private fun downloadNameExists(context: Context, name: String): Boolean {
+    private fun downloadNameExists(
+        context: Context,
+        name: String,
+        mediaTarget: MediaTarget?
+    ): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            mediaStoreDownloadNameExists(context.contentResolver, name)
+            val target = mediaTarget ?: return false
+            mediaStoreNameExists(context.contentResolver, name, target)
         } else {
             val directory = legacyDownloadsDirectory() ?: return false
             File(directory, name).exists()
@@ -793,23 +928,24 @@ object Downloader {
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun mediaStoreDownloadNameExists(
+    private fun mediaStoreNameExists(
         resolver: ContentResolver,
-        fileName: String
+        fileName: String,
+        target: MediaTarget
     ): Boolean {
         val projection = arrayOf(MediaStore.MediaColumns._ID)
-        // RELATIVE_PATH 正常为 "Download/"，个别 ROM/旧数据可能不带斜杠，两种都查。
+        // RELATIVE_PATH 正常带尾斜杠（Download/、Pictures/…），个别 ROM/旧数据可能不带，两种都查。
         val selection = "(${MediaStore.MediaColumns.RELATIVE_PATH} = ? OR " +
             "${MediaStore.MediaColumns.RELATIVE_PATH} = ?) AND " +
             "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
         val args = arrayOf(
-            "${Environment.DIRECTORY_DOWNLOADS}/",
-            Environment.DIRECTORY_DOWNLOADS,
+            target.relativePath,
+            target.relativePath.trimEnd('/'),
             fileName
         )
         return try {
             resolver.query(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                target.collectionUri,
                 projection,
                 selection,
                 args,

@@ -1122,8 +1122,18 @@ class WebHost(
                     )
                     showToast(activity.getString(R.string.download_failed), long = false)
                 },
-                onDone = { savedName, contentUri ->
-                    showDownloadSaved(savedName, contentUri)
+                onDone = { result ->
+                    // v0.4.5：成功路径写入 App 内「最近下载」历史。记录失败在
+                    // DownloadHistory 内部静默降级，绝不能影响下载完成提示。
+                    DownloadHistory.record(
+                        context = activity,
+                        displayName = result.savedName,
+                        contentUri = result.contentUri?.toString(),
+                        legacyPath = result.legacyPath,
+                        mime = result.mimeType,
+                        size = result.sizeBytes
+                    )
+                    showDownloadSaved(result)
                 }
             )
         } catch (t: Throwable) {
@@ -1133,18 +1143,27 @@ class WebHost(
     }
 
     /**
-     * 下载完成提示（v0.4.4）。
+     * 下载完成提示（v0.4.4 引入，v0.4.5 适配媒体分流）。
      *
-     * 文件已经由 [Downloader] 写入公共 Download 目录并回传**最终文件名**。
-     * - Activity 在前台且 MediaStore 返回了可打开的 content Uri：弹轻量对话框，
-     *   文案保持「已保存到系统下载目录：<最终文件名>」，并提供「打开」入口；
-     * - 其它情况（后台、API ≤28 无 content Uri、弹窗失败）：退回原 Toast，行为不变。
+     * 文件已经由 [Downloader] 写入目标 MediaStore 集合/公共 Download 并回传最终文件名。
+     * - 文档（`Download/`）沿用「已保存到系统下载目录：<最终文件名>」；
+     * - 图片/视频/音频（Pictures/Movies/Music）改为「已保存到系统媒体库（目录）：<文件名>」；
+     * - Activity 在前台且 MediaStore 返回了可打开的 content Uri：弹轻量对话框并提供「打开」入口；
+     * - 其它情况（后台、API ≤28 无 content Uri、弹窗失败）：退回 Toast，行为不变。
      *
      * 打开失败（没有 ACTION_VIEW 处理应用）只提示文件保存位置，不崩溃、不申请额外权限。
      */
-    private fun showDownloadSaved(savedName: String, contentUri: Uri?) {
+    private fun showDownloadSaved(result: DownloadResult) {
+        val savedName = result.savedName
+        val contentUri = result.contentUri
+        val directory = result.savedDirectory.trimEnd('/')
         val message = try {
-            activity.getString(R.string.download_saved, savedName)
+            if (directory.isEmpty() || directory == "Download") {
+                activity.getString(R.string.download_saved, savedName)
+            } else {
+                // v0.4.5：图片/视频/音频会落到 Pictures/Movies/Music，不能再说“下载目录”。
+                activity.getString(R.string.download_saved_media, directory, savedName)
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "format download message failed", t)
             activity.getString(R.string.download_started)

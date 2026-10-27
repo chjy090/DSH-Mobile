@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v0.4.5：只暴露公共 Download 目录，供 Android 8/9「最近下载」通过 FileProvider 打开。 -->
+<paths>
+    <external-path
+        name="downloads"
+        path="Download/" />
+</paths>

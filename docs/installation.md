@@ -1,6 +1,6 @@
 # DSH Mobile 安装与配置指南
 
-> 适用客户端：**DSH Mobile v0.4.4**（versionCode `11`，applicationId `ai.deepseek.dsh.mobile`）
+> 适用客户端：**DSH Mobile v0.4.5**（versionCode `12`，applicationId `ai.deepseek.dsh.mobile`）
 >
 > 配套服务端：`dsh` + [`dsh-auth-gate`](https://github.com/chjy090/dsh-auth-gate) v0.4.0 及以上。
 > 其中「认证网关模式」的扫码配对、设备令牌与自动续期需要该插件；`publicFingerprint`
@@ -95,7 +95,7 @@ Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。�
 ### 1.5 开始前检查清单
 
 - [ ] 手机为 Android 8.0+，能安装 APK。
-- [ ] 已取得 `DSH-Mobile-v0.4.4-release.apk`，SHA-256 与 §2.2 一致。
+- [ ] 已取得 `DSH-Mobile-v0.4.5-release.apk`，SHA-256 与 §2.2 一致。
 - [ ] 服务端 `dsh` 与 `dsh-auth-gate` 正常运行。
 - [ ] 手机浏览器能打开 `https://<host>:3443/__auth/login`（自签证书会先提示，属正常）。
 - [ ] 管理页 `/__admin` 已完成初始化，TOTP 可正常生成 6 位验证码。
@@ -110,26 +110,26 @@ Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。�
 
 发布页：
 
-- 版本页：<https://github.com/chjy090/DSH-Mobile/releases/tag/v0.4.4>（由 Lead 验证后发布）
+- 版本页：<https://github.com/chjy090/DSH-Mobile/releases/tag/v0.4.5>（由 Lead 验证后发布）
 - APK 直链：
-  <https://github.com/chjy090/DSH-Mobile/releases/download/v0.4.4/DSH-Mobile-v0.4.4-release.apk>
+  <https://github.com/chjy090/DSH-Mobile/releases/download/v0.4.5/DSH-Mobile-v0.4.5-release.apk>
 
-v0.4.4 的 Release 资产：
+v0.4.5 的 Release 资产：
 
 | 文件 | 说明 |
 | --- | --- |
-| `DSH-Mobile-v0.4.4-release.apk` | 签名后的 release APK |
-| `SHA256SUMS-v0.4.4.txt` | APK 的 SHA-256 校验文件 |
-| `release-notes-v0.4.4.md` | 发布说明 |
+| `DSH-Mobile-v0.4.5-release.apk` | 签名后的 release APK |
+| `SHA256SUMS-v0.4.5.txt` | APK 的 SHA-256 校验文件 |
+| `release-notes-v0.4.5.md` | 发布说明 |
 
 当前构建版本信息（本地 `deliverables/` 与构建产物已核对；GitHub Release 待 Lead 发布）：
 
 | 项目 | 值 |
 | --- | --- |
-| versionName | `0.4.4` |
-| versionCode | `11` |
-| 文件大小 | 25,520,407 字节（约 24.34 MiB） |
-| SHA-256 | `860f90638d1d8e66094452c703eb4d74b17f28c38e1bc9c123a6ab7a383a8126` |
+| versionName | `0.4.5` |
+| versionCode | `12` |
+| 文件大小 | 25,541,227 字节（约 24.36 MiB） |
+| SHA-256 | `3eb4394d9ceb50c7d8ec3e8cc4e0a6a88e8428001d3379e8e825100b52cbb4e3` |
 | 签名证书 SHA-256 | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
 
 > 只从上述官方 Release 或你信任的内部渠道获取 APK。不要使用来源不明的“破解版”“去广告版”
@@ -143,27 +143,27 @@ Linux/macOS：
 
 ```bash
 cd ~/Downloads
-sha256sum DSH-Mobile-v0.4.4-release.apk
-# macOS 也可用：shasum -a 256 DSH-Mobile-v0.4.4-release.apk
+sha256sum DSH-Mobile-v0.4.5-release.apk
+# macOS 也可用：shasum -a 256 DSH-Mobile-v0.4.5-release.apk
 ```
 
 期望输出：
 
 ```text
-860f90638d1d8e66094452c703eb4d74b17f28c38e1bc9c123a6ab7a383a8126  DSH-Mobile-v0.4.4-release.apk
+3eb4394d9ceb50c7d8ec3e8cc4e0a6a88e8428001d3379e8e825100b52cbb4e3  DSH-Mobile-v0.4.5-release.apk
 ```
 
-如果同时下载了 `SHA256SUMS-v0.4.4.txt`，可在同一目录执行：
+如果同时下载了 `SHA256SUMS-v0.4.5.txt`，可在同一目录执行：
 
 ```bash
-sha256sum -c SHA256SUMS-v0.4.4.txt
-# 期望：DSH-Mobile-v0.4.4-release.apk: OK
+sha256sum -c SHA256SUMS-v0.4.5.txt
+# 期望：DSH-Mobile-v0.4.5-release.apk: OK
 ```
 
 Windows PowerShell：
 
 ```powershell
-Get-FileHash .\DSH-Mobile-v0.4.4-release.apk -Algorithm SHA256
+Get-FileHash .\DSH-Mobile-v0.4.5-release.apk -Algorithm SHA256
 ```
 
 哈希不一致时**不要安装**，重新下载并再次校验。
@@ -175,7 +175,7 @@ Get-FileHash .\DSH-Mobile-v0.4.4-release.apk -Algorithm SHA256
 ```bash
 export ANDROID_HOME=/path/to/android-sdk
 "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-  --verbose --print-certs DSH-Mobile-v0.4.4-release.apk
+  --verbose --print-certs DSH-Mobile-v0.4.5-release.apk
 ```
 
 期望结果包含：
@@ -194,13 +194,13 @@ DSH Mobile，否则会因签名不一致失败；也不要信任该文件。
 
 ```bash
 "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
-  DSH-Mobile-v0.4.4-release.apk | head -n 8
+  DSH-Mobile-v0.4.5-release.apk | head -n 8
 ```
 
 应能看到：
 
 ```text
-package: name='ai.deepseek.dsh.mobile' versionCode='11' versionName='0.4.4' ...
+package: name='ai.deepseek.dsh.mobile' versionCode='12' versionName='0.4.5' ...
 minSdkVersion:'26'
 targetSdkVersion:'35'
 ```
@@ -225,13 +225,13 @@ targetSdkVersion:'35'
 
 ```bash
 adb devices                 # 确认设备已授权
-adb install DSH-Mobile-v0.4.4-release.apk
+adb install DSH-Mobile-v0.4.5-release.apk
 ```
 
 已安装同签名旧版本时，覆盖安装：
 
 ```bash
-adb install -r DSH-Mobile-v0.4.4-release.apk
+adb install -r DSH-Mobile-v0.4.5-release.apk
 ```
 
 安装后确认版本：
@@ -243,11 +243,11 @@ adb shell dumpsys package ai.deepseek.dsh.mobile | grep -E "versionCode|versionN
 期望类似：
 
 ```text
-versionCode=11 minSdk=26 targetSdk=35
-versionName=0.4.4
+versionCode=12 minSdk=26 targetSdk=35
+versionName=0.4.5
 ```
 
-> v0.4.4 的 release APK 使用 v2 签名方案；Android 8.0+ 支持。不要用 `adb install` 安装
+> v0.4.5 的 release APK 使用 v2 签名方案；Android 8.0+ 支持。不要用 `adb install` 安装
 > `app-debug.apk` 去覆盖 release 包，debug 与 release 签名不同，会报
 > `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。
 
@@ -265,8 +265,8 @@ versionName=0.4.4
 
 ### 2.5 versionCode 与 versionName
 
-- `versionName` 是给人看的版本号（`0.4.4`），App「关于」对话框显示的是它。
-- `versionCode` 是给 Android 比较新旧的整数（`11`）。正常安装要求新包的 versionCode
+- `versionName` 是给人看的版本号（`0.4.5`），App「关于」对话框显示的是它。
+- `versionCode` 是给 Android 比较新旧的整数（`12`）。正常安装要求新包的 versionCode
   不低于已安装版本；降级需要显式允许（`adb install -r -d`）。
 - 覆盖升级时 Android 还会校验签名证书一致；versionCode 高但签名不同同样无法安装。
 
@@ -462,7 +462,7 @@ https://auth.example.com:8443/__auth/pair#v=1&t=<一次性ticket>&fp=<64位证�
 
 ### 4.5 配对成功的检查
 
-- [ ] App「关于」显示 `0.4.4`。
+- [ ] App「关于」显示 `0.4.5`。
 - [ ] 管理页「设备」出现一条以手机型号命名的设备，平台显示为 `安卓`/`android`。
 - [ ] 登录后能看到 `dsh` Web GUI，而不是停在登录页或错误页。
 - [ ] 返回手势能弹出「应用菜单」。
@@ -559,13 +559,14 @@ v0.4.1 起不再有“再按一次返回退出”，退出请用菜单里的「�
 | 菜单项 | 行为 | 是否清数据 |
 | --- | --- | --- |
 | 刷新 | 关闭错误层并重新加载当前页 | 否 |
+| 最近下载（v0.4.5，两种模式都显示） | App 内最近 50 次成功下载列表；点击打开文件，底部「清除记录」只清列表、不删文件（详见 §5.10） | 否 |
 | 退出当前会话 | 通过 `POST /__auth/logout` 让服务端删除 session，清 session cookie，回到登录页；**保留** deviceToken 与设备绑定 cookie | 否（下次冷启动自动登录） |
 | 忘记此设备（重新配对） | 二次确认后删除本机 deviceToken、该 host 全部 WebView cookie（含设备绑定）与配对 profile，回到配对页 | **是**（下次必须重新扫码，见 §7） |
 | 诊断日志 | 打开内存诊断日志，可一键复制 | 否 |
 | 关于 | 显示 App 名称、versionName、包名、Android 版本、当前服务器地址、设备有效期；版本号连点 7 次可解锁/锁定直连模式 | 否 |
 | 退出应用 | 结束当前任务栈（`finishAffinity()`），不卸载、不清数据 | 否 |
 
-直连模式（无认证网关）：刷新 / 重新配对 / 诊断日志 / 关于 / 退出应用；其中「重新配对」
+直连模式（无认证网关）：刷新 / 最近下载 / 重新配对 / 诊断日志 / 关于 / 退出应用；其中「重新配对」
 清 WebView cookie（含设备绑定）、本地配对 profile 和当前设备令牌，回到配对页。
 直连模式的输入区在 v0.4.3 起默认隐藏，需先在「关于」里连点版本号 7 次解锁（见 §4.7）。
 
@@ -594,7 +595,10 @@ v0.4.1 起不再有“再按一次返回退出”，退出请用菜单里的「�
 
 ### 5.5 下载
 
-- 页面中的附件/导出文件由 App 内下载器保存到系统「下载」目录（`Download/`）。
+- 页面中的附件/导出文件由 App 内下载器保存：
+  - **Android 10+** 按 MIME 分流：图片 → `Pictures/`、视频 → `Movies/`、音频 → `Music/`，
+    文档/归档/apk/未知 → `Download/`；
+  - **Android 8/9** 统一保存到公共 `Download/`，完成后调用媒体扫描。
 - Android 10+ 通过 MediaStore 写入，不需要存储权限；Android 9 及以下首次下载会请求
   `WRITE_EXTERNAL_STORAGE`。
 - **文件名（v0.4.4 起）**：优先使用服务端 `Content-Disposition` 的 `filename*=UTF-8''...`
@@ -603,16 +607,24 @@ v0.4.1 起不再有“再按一次返回退出”，退出请用菜单里的「�
   不再追加 `-yyyyMMdd-HHmmss` 时间戳。
   - 非法字符（`\ / : * ? " < > |`）与控制字符替换为 `_`，去掉首尾空格/尾部点，
     防路径穿越与隐藏文件；无扩展名时按 MIME 补（如 `.pdf`）。
-- **重名规则**：`说明.pdf` → 已存在时 `说明 (1).pdf` → `说明 (2).pdf` …，扩展名保持。
-  Android 10+ 插入前查询 MediaStore `Download/` + `DISPLAY_NAME`；Android 8/9 检查文件是否存在。
+- **重名规则（v0.4.5 起按目标集合查重）**：`说明.pdf` → 已存在时 `说明 (1).pdf` →
+  `说明 (2).pdf` …，扩展名保持。Android 10+ 插入前查询**本次目标集合**（Pictures/Movies/Music/
+  Download）中相同 `RELATIVE_PATH` + `DISPLAY_NAME` 的记录；Android 8/9 检查文件是否存在。
   提示里显示的是**最终保存名**（系统并发改名时也以 MediaStore 实际名称为准）。
-- **保存位置与可见性**：Android 10+ 写入时补齐 `DATE_ADDED`/`DATE_MODIFIED`（MediaStore 单位为秒）
-  与 `SIZE`，完成后解除 `IS_PENDING` 并通知 MediaStore 刷新，便于在系统「文件 → 最近 / 下载」
-  中看到；Android 8/9 落盘后调用媒体扫描器补索引。
-  不同厂商文件管理器的「最近」判定略有差异，若「最近」不显示，请到「下载」目录查看。
-- **完成提示与打开（v0.4.4）**：文案为「已保存到系统下载目录：<最终文件名>」。Android 10+ 且
-  App 在前台时会弹同文案对话框，可点「打开」调用系统应用查看；没有可处理的应用时只提示保存位置。
-  后台、弹窗失败或 Android 8/9（无 content Uri）时沿用原 Toast。
+- **保存位置与可见性（v0.4.5）**：Android 10+ 写入时补齐 `DATE_ADDED`/`DATE_MODIFIED`
+  （MediaStore 单位为秒）与 `SIZE`，完成后解除 `IS_PENDING`，并 `notifyChange` 单条记录和
+  **实际所在集合**；若能从 `DATA` 查到绝对路径，再补一次媒体扫描（失败只记日志）。
+  Android 8/9 落盘后调用媒体扫描器补索引。
+  这样图片/视频/音频通常可在系统图库/相册的「最近」中看到；文档仍在「文件 → 下载」。
+  但**部分 OEM 的「最近」只聚合媒体库或系统下载记录，普通文档可能永远不出现**，详见 §5.10。
+- **App 内「最近下载」（v0.4.5）**：成功下载会写入 App 本地历史（最多 50 条），
+  在应用菜单 →「最近下载」中查看/打开；这是不依赖厂商「最近」规则的可靠兜底，详见 §5.10。
+- **完成提示与打开（v0.4.4 起，v0.4.5 适配媒体分流）**：文档仍提示
+  「已保存到系统下载目录：<最终文件名>」；图片/视频/音频提示
+  「已保存到系统媒体库（Pictures/Movies/Music）：<最终文件名>」。Android 10+ 且 App 在前台时
+  会弹同文案对话框，可点「打开」调用系统应用查看；没有可处理的应用时只提示保存位置。
+  后台、弹窗失败或 Android 8/9（无 content Uri）时沿用 Toast；Android 8/9 的文件仍可从
+  App 内「最近下载」通过 FileProvider 打开。
 - 下载会带上当前 WebView 的 Cookie 和 User-Agent；自签 HTTPS 也能下载。
 - 仅支持 `http://` / `https://` 直链；`blob:`、`data:` 链接会提示“该链接暂不支持下载”。
 - 没有下载队列/断点续传界面；失败会 Toast，超大文件受网络与系统限制。
@@ -664,6 +676,38 @@ v0.4.1 起不再有“再按一次返回退出”，退出请用菜单里的「�
 - WebSocket 断线不会自动弹重连；可点「刷新」或重新进入页面。
 - 没有后台推送/常驻通知。
 - 诊断日志只存在内存（最多 300 条），进程被杀后丢失；需要时及时复制。
+
+### 5.10 App 内「最近下载」与系统「最近」的限制
+
+**入口与行为（v0.4.5）**
+
+- 主界面用系统返回手势/返回键打开「应用菜单」→「最近下载」；认证网关模式与直连模式都显示。
+- 列表为最近 **50 次成功下载**，最新在前，每项显示文件名 + 保存时间（`yyyy-MM-dd HH:mm`）。
+- 点击条目调用系统 `ACTION_VIEW` 打开文件：
+  - Android 10+ 使用下载时 MediaStore 实际集合返回的 content Uri；
+  - Android 8/9 使用 `FileProvider`（authority `${applicationId}.fileprovider`，仅暴露 `Download/`）
+    把公共 Download 下的绝对路径转换成临时可读 Uri。
+- 文件已被移动/删除，或系统没有可处理该类型的应用时，Toast
+  「无法打开「文件名」：文件可能已被移动或删除，或没有可处理的应用。」，不崩溃。
+- 对话框底部「清除记录」会二次确认；**只清 App 内历史，不删除任何已下载文件**。
+- 历史保存在独立 SharedPreferences（JSON，最多 50 条），记录文件名、保存时间、MIME、大小、
+  content Uri/旧版绝对路径；**不记录 URL、token、cookie 等网络凭据**。读写失败静默降级，
+  不影响下载与完成提示。
+
+**为什么系统「最近」仍可能看不到**
+
+部分 OEM（Realme/OPPO/小米等）的「文件管理 → 最近」只聚合**媒体库条目**或**系统下载记录**，
+普通 PDF/ZIP/APK 等文档即使已正确写入 `MediaStore.Downloads`，也可能被厂商策略过滤；
+App 没有接口强制把任意文档注入厂商「最近」。v0.4.5 的应对是：
+
+1. **App 内「最近下载」作为可靠兜底**——不依赖 ROM 规则，下载成功即可在 App 内打开；
+2. **媒体类型分流**——Android 10+ 的图片/视频/音频写入 `Pictures/`、`Movies/`、`Music/`
+   对应媒体集合，系统图库/相册的「最近」通常可见；
+3. **额外索引尝试**——Q+ 收尾可查到绝对路径时补一次媒体扫描，提升刷新概率；
+4. **文档仍在 `Download/`**——可在系统「文件 → 下载」分类中查看。
+
+> 因此：系统「最近」不显示文档**不是下载失败**。请优先用 App 内「最近下载」或
+> 「文件 → 下载」；只有图片/视频/音频才建议到系统图库/相册的「最近」查看。
 
 ---
 
@@ -1046,7 +1090,8 @@ v0.4.1 起没有悬浮 ⋮ 按钮，不要等右上角按钮；从屏幕边缘�
 | --- | --- | --- |
 | 语音按钮提示不支持/无法录音 | 页面是 `http://`；未授予麦克风；页面不支持 | 改用 `https://` 网关；系统设置授予麦克风；看诊断日志 |
 | 下载失败 | `blob:`/`data:` 链接；网络中断；Android 9 及以下未给存储权限 | 用 http(s) 直链；重试；授予存储权限；看诊断日志 |
-| 下载成功但「最近」看不到 | 厂商文件管理器「最近」过滤规则不同；MediaStore 索引尚未刷新 | 打开「文件 → 下载」目录；下拉刷新/重开文件管理器；Android 8/9 确认已给存储权限 |
+| 下载成功但系统「最近」看不到 | 部分 OEM「最近」只聚合媒体库/系统下载记录，普通文档可能不显示；索引可能未刷新 | 用应用菜单 →「最近下载」打开（v0.4.5 兜底）；文档到「文件 → 下载」查看，图片/视频/音频到图库/相册「最近」查看；下拉刷新/重开文件管理器 |
+| App 内「最近下载」为空或打不开 | 升级前下载的文件没有历史记录；文件被移动/删除；没有可处理该类型的应用 | 历史只记录 v0.4.5 之后成功下载的文件；重新下载一次；用系统文件管理器确认文件仍在，或安装对应阅读器 |
 | 下载文件名变成 `(1)`/`(2)` | 下载目录已有同名文件（v0.4.4 起按系统习惯递增而不是覆盖） | 正常行为；删除旧文件或改名后重试 |
 | 文件选择器打不开 | 系统文件选择器异常/无可用应用 | 重试；检查系统组件；换用其他文件管理器 |
 | 复制不生效 | 页面 Clipboard API 被策略禁止；原生桥异常 | 再点一次；看 Toast/诊断日志；Android 13 系统提示属正常 |
@@ -1073,7 +1118,7 @@ App 内：
 - 来源包括 WebView console、JS 桥、TLS pin、下载等；
 - 写入时会对 URL 中的 `token=` 参数做 `<REDACTED>` 脱敏；
 - **不会自动附带** App 版本、设备型号、服务端版本；请在反馈时另附「关于」里的
-  versionName（`0.4.4`）和 Android 版本；
+  versionName（`0.4.5`）和 Android 版本；
 - 日志可能仍包含服务器地址、页面片段、错误堆栈；发送前请自行检查，
   **不要**附带密码、TOTP、deviceToken、Cookie、配对二维码或截图。
 
@@ -1137,11 +1182,35 @@ adb logcat -s DSHMobile DSHAuthGate DSHQrScan DSHDeviceToken
 
 | 版本 | versionCode | APK | SHA-256 | 签名证书 SHA-256 |
 | --- | --- | --- | --- | --- |
-| v0.4.4（当前） | 11 | `DSH-Mobile-v0.4.4-release.apk` | `860f90638d1d8e66094452c703eb4d74b17f28c38e1bc9c123a6ab7a383a8126` | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
+| v0.4.5（当前） | 12 | `DSH-Mobile-v0.4.5-release.apk` | `3eb4394d9ceb50c7d8ec3e8cc4e0a6a88e8428001d3379e8e825100b52cbb4e3` | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
+| v0.4.4 | 11 | `DSH-Mobile-v0.4.4-release.apk` | `860f90638d1d8e66094452c703eb4d74b17f28c38e1bc9c123a6ab7a383a8126` | 同上 |
 | v0.4.3 | 10 | `DSH-Mobile-v0.4.3-release.apk` | `35cfdfbae6c97b1bbb1821f36b55b459246c784fffafa23da84153091ddf0304` | 同上 |
 | v0.4.2 | 9 | `DSH-Mobile-v0.4.2-release.apk` | `1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495` | 同上 |
 | v0.4.1 | 8 | `DSH-Mobile-v0.4.1-release.apk` | `a9ad7979c1487e31b0c55ba374c39aed6e3f5b5990c3421ebf38748838848e80` | 同上 |
 | v0.4.0 | 7 | `DSH-Mobile-v0.4.0-release.apk` | `5d19e16e9445fc54e94f82ba1e89f356ceed03df71c7dbc726847b16c35552c5` | 同上 |
+
+v0.4.4 → v0.4.5 的主要变化：
+
+- **App 内「最近下载」（核心兜底）**：应用菜单新增「最近下载」，认证网关与直连模式都显示。
+  记录最近 50 次成功下载的文件名、保存时间、MIME、大小，以及 MediaStore content Uri
+  （Android 10+）或公共 Download 绝对路径（Android 8/9）。点击用 `ACTION_VIEW` 打开；
+  底部「清除记录」只清历史、不删文件。历史存在独立 SharedPreferences，写入/读取失败静默跳过，
+  且**不记录 URL/token/cookie**。
+- **下载按 MIME 分流（Android 10+）**：图片 → `MediaStore.Images` / `Pictures/`，
+  视频 → `MediaStore.Video` / `Movies/`，音频 → `MediaStore.Audio` / `Music/`，
+  文档/归档/apk/未知 → `MediaStore.Downloads` / `Download/`。文件名、重名递增、日期/大小、
+  `IS_PENDING` 与 `notifyChange` 逻辑复用；`onDone` 返回实际集合的 content Uri。
+  Android 8/9 仍统一落 `Download/`，完成后媒体扫描。
+- **额外索引尝试**：Android 10+ 收尾时若能通过 `DATA` 查到绝对路径，补一次
+  `MediaScannerConnection.scanFile`；查不到/失败只记日志，不影响下载。
+- **FileProvider（Android 8/9 打开历史）**：新增 `androidx.core.content.FileProvider`，
+  authority 为 `${applicationId}.fileprovider`，`file_paths.xml` 只暴露 `Download/`；
+  Android 10+ 直接使用 MediaStore content Uri，不需要 FileProvider。
+- **「最近」ROM 限制**：部分 OEM 文件管理器的「最近」只聚合媒体库条目或系统下载记录，
+  普通文档即使写入 MediaStore 也可能不显示；App 无法强制改写厂商规则。因此 v0.4.5 用
+  App 内「最近下载」作为可靠兜底，同时把图片/视频/音频分流到媒体库，提升在图库/「最近」的可见性。
+- 未新增权限/依赖；TLS fail-open、Cookie 注入、Android 8/9 存储权限申请、配对与静默登录不变。
+- 版本号 `0.4.5` / versionCode `12`。
 
 v0.4.3 → v0.4.4 的主要变化：
 
@@ -1192,17 +1261,17 @@ v0.4.0 → v0.4.1 的主要变化：
 
 ### 10.2 覆盖升级
 
-同签名（官方 v0.4.3 → v0.4.4，或更早的 v0.4.x → v0.4.4）：
+同签名（官方 v0.4.4 → v0.4.5，或更早的 v0.4.x → v0.4.5）：
 
 1. 下载并校验新 APK（§2.2）。
 2. 点击安装，系统显示「更新」；或：
 
    ```bash
-   adb install -r DSH-Mobile-v0.4.4-release.apk
+   adb install -r DSH-Mobile-v0.4.5-release.apk
    ```
 
 3. 数据保留：服务器地址、pin、加密 deviceToken、WebView Cookie 均保留；升级后无需重新配对。
-4. 打开 App →「关于」确认版本为 `0.4.4`；已登录过的网关设备应静默进入 GUI，再试一次返回手势菜单。
+4. 打开 App →「关于」确认版本为 `0.4.5`；已登录过的网关设备应静默进入 GUI，再打开应用菜单确认出现「最近下载」。
 5. 直连模式若解锁过会继续显示；配对页默认只保留扫码/相册两个入口。
 
 ### 10.3 回滚到旧版本
@@ -1214,7 +1283,7 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 ```
 
 - `-d` 允许 versionCode 降低；仍需签名一致。
-- 一般保留数据；v0.4.0–v0.4.4 的配对数据结构兼容（v0.4.2 只新增非敏感的可选标记；
+- 一般保留数据；v0.4.0–v0.4.5 的配对数据结构兼容（v0.4.2 只新增非敏感的可选标记；
   v0.4.3 的直连解锁标记保存在独立 UI SharedPreferences，不属于配对数据）。
 - 部分厂商系统/安装器可能仍拒绝降级；此时只能卸载后安装（会清数据，需重新配对）。
 - 回滚前建议确认新版本问题是否与 App 有关（也可能是服务端/网络），并记录配对信息。
@@ -1223,16 +1292,19 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 
 ### 10.4 升级后检查
 
-- [ ] 「关于」显示 `0.4.4`；认证网关模式还会显示「设备有效期至：…」或「—」。
+- [ ] 「关于」显示 `0.4.5`；认证网关模式还会显示「设备有效期至：…」或「—」。
 - [ ] 配对页默认只有「扫码配对」「从相册选择二维码」；「关于」连点版本号 7 次后出现可展开直连区域，
       再连点 7 次消失（Toast 分别提示「直连模式已解锁」「直连模式已锁定」）。
 - [ ] 「从相册选择二维码」选原图截图可完成配对；选无二维码图片只 Toast 失败提示，不崩溃。
 - [ ] 打开后直接进入 GUI，未要求重新配对/登录（同签名覆盖正常；首次配对设备除外）。
 - [ ] 返回手势/返回键能弹出菜单（无悬浮 ⋮）。
-- [ ] 认证网关模式菜单包含「退出当前会话」「忘记此设备（重新配对）」；
-      直连模式保持「重新配对」。
-- [ ] 下载中文名文件保留原名；重复下载出现 `(1)`；在「文件 → 下载/最近」可见；
-      Android 10+ 前台下载完成后「打开」入口可用。
+- [ ] 认证网关模式菜单包含「最近下载」「退出当前会话」「忘记此设备（重新配对）」；
+      直连模式包含「最近下载」「重新配对」。
+- [ ] 下载中文名文件保留原名；重复下载出现 `(1)`。
+- [ ] Android 10+：图片落 `Pictures/`、视频落 `Movies/`、音频落 `Music/`、PDF/ZIP 等落
+      `Download/`；媒体文件能在系统图库/相册的「最近」看到（文档看不到属 ROM 限制，见 §5.10）。
+- [ ] 应用菜单 →「最近下载」能看到本次下载；点击可打开；「清除记录」后列表清空但文件仍在。
+- [ ] Android 10+ 前台下载完成后「打开」入口仍可用；Android 8/9 从「最近下载」可打开文件。
 - [ ] 语音/剪贴板按需可用。
 - [ ] 若提示 `CERT_CHANGED`，检查是否在升级期间更换了证书/代理（见 §6.3）。
 
@@ -1379,11 +1451,12 @@ sha256sum app/build/outputs/apk/release/app-release.apk
 
 ## 文档核对说明
 
-- 本文按 DSH Mobile v0.4.4 源码（`MainActivity`、`WebHost`、`Downloader`、`AuthGateClient`、`CertPin`、
-  `DeviceTokenStore`、`QrPairPayload`、`QrScanActivity`、`SessionStore`、`Diagnostics`）与
-  `dsh-auth-gate` v0.6.2 源码/README 核对。v0.4.4 的下载文件名/MIME/MediaStore 索引改动在
-  `Downloader.kt`，下载完成「打开」入口在 `WebHost.kt`；直连模式隐藏入口仍在 `MainActivity`
-  内实现（未新增 Activity 与依赖）。
+- 本文按 DSH Mobile v0.4.5 源码（`MainActivity`、`WebHost`、`Downloader`、`DownloadHistory`、
+  `AuthGateClient`、`CertPin`、`DeviceTokenStore`、`QrPairPayload`、`QrScanActivity`、`SessionStore`、
+  `Diagnostics`）与 `dsh-auth-gate` v0.6.2 源码/README 核对。v0.4.5 的「最近下载」在
+  `DownloadHistory.kt` + `MainActivity.kt`（菜单/对话框）+ `WebHost.kt`（成功写入）；媒体类型分流、
+  目标集合查重与额外媒体扫描在 `Downloader.kt`；Android 8/9 打开用 `FileProvider`
+  （`AndroidManifest.xml` + `res/xml/file_paths.xml`）。未新增 Activity、权限或第三方依赖。
 - APK 的 SHA-256、签名证书、versionCode 与 ABI 已在构建机用 `sha256sum`、`apksigner`、
   `aapt2` 核对；真机上的权限弹窗、厂商设置路径和返回手势行为可能因 Android 版本/OEM 不同，
   请按实际界面操作。

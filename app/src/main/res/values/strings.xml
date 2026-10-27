@@ -65,6 +65,7 @@
     <!-- 菜单（v0.4.1：悬浮 ⋮ 按钮移除，改由返回手势打开应用菜单；v0.4.2 拆分登出） -->
     <string name="app_menu_title">应用菜单</string>
     <string name="menu_refresh">刷新</string>
+    <string name="menu_download_history">最近下载</string>
     <string name="menu_pair">重新配对</string>
     <string name="menu_logout_session">退出当前会话</string>
     <string name="menu_forget_device">忘记此设备（重新配对）</string>
@@ -79,6 +80,15 @@
     <string name="forget_device_confirm">忘记并清空</string>
     <string name="forget_device_done">已忘记此设备，请重新扫码配对</string>
 
+    <!-- 最近下载（v0.4.5） -->
+    <string name="download_history_item">%1$s\n%2$s</string>
+    <string name="download_history_empty">暂无下载记录。下载成功后会自动记录在这里。</string>
+    <string name="download_history_clear">清除记录</string>
+    <string name="download_history_clear_title">清除最近下载记录？</string>
+    <string name="download_history_clear_message">只清除 App 内的下载记录，不会删除任何已下载文件。</string>
+    <string name="download_history_cleared">已清除下载记录（文件不会被删除）</string>
+    <string name="download_history_open_failed">无法打开「%1$s」：文件可能已被移动或删除，或没有可处理的应用。</string>
+
     <!-- 诊断日志 -->
     <string name="diagnostics_title">诊断日志</string>
     <string name="diagnostics_copy">复制</string>
@@ -87,9 +97,10 @@
     <!-- 操作反馈 -->
     <string name="download_started">已开始下载</string>
     <string name="download_saved">已保存到系统下载目录：%1$s</string>
+    <string name="download_saved_media">已保存到系统媒体库（%1$s）：%2$s</string>
     <string name="download_open">打开</string>
     <string name="download_done">完成</string>
-    <string name="download_open_failed">未找到可打开该文件的应用；文件已保存在系统下载目录：%1$s</string>
+    <string name="download_open_failed">未找到可打开该文件的应用；文件已保存在系统相册或下载目录：%1$s</string>
     <string name="download_failed">下载失败</string>
     <string name="download_permission_denied">未获得存储权限，无法保存到下载目录</string>
     <string name="download_unsupported">该链接暂不支持下载</string>

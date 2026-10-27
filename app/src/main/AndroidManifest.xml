@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- DSH Mobile v0.4.4（versionCode 11）：WebView 外壳 + 认证网关扫码/相册配对；下载保留原名并补齐 MediaStore 索引；返回手势打开应用菜单；直连模式默认隐藏。 -->
+<!-- DSH Mobile v0.4.5（versionCode 12）：App 内「最近下载」兜底；下载按 MIME 分流到 Pictures/Movies/Music，文档仍在 Download；Q+ 补一次媒体扫描；WebView/配对/菜单能力延续 v0.4.4。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -58,6 +58,18 @@
             android:exported="false"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.DSHMobile" />
+
+        <!-- v0.4.5「最近下载」：Android 8/9 用 FileProvider 打开公共 Download 下的文件；
+             Android 10+ 直接使用 MediaStore content Uri。仅暴露 Download/，不导出。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>
