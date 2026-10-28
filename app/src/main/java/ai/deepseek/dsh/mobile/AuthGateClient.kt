@@ -93,12 +93,19 @@ class AuthGateClient {
 
     // ---------------------------------------------------------------- 公共 API
 
-    /** 兑换设备凭据；阻塞，需在后台线程调用。 */
+    /**
+     * 兑换设备凭据；阻塞，需在后台线程调用。
+     *
+     * [clientDeviceId] 是 v0.4.6 引入的稳定客户端设备标识（见 [ClientDeviceId]）：
+     * 服务端据此对同一设备的重复配对去重。旧服务端会忽略该未知字段，无需降级；
+     * 值非法/为空时不发送，避免多台设备被同一个空值误合并。
+     */
     fun redeem(
         baseUrl: String,
         fingerprint: String,
         ticket: String,
-        deviceName: String
+        deviceName: String,
+        clientDeviceId: String
     ): Result<DeviceGrant> {
         val endpoint = endpointOf(baseUrl, REDEEM_PATH)
             ?: return Result.failure(IllegalArgumentException("invalid auth gate base url"))
@@ -108,11 +115,20 @@ class AuthGateClient {
             return Result.failure(IllegalArgumentException("empty pair ticket"))
         }
 
+        val deviceId = clientDeviceId.trim().takeIf { ClientDeviceId.isValid(it) }
+        if (deviceId == null && clientDeviceId.isNotBlank()) {
+            Log.w(TAG, "redeem with malformed clientDeviceId; omitting field")
+        }
+
         val body = try {
             JSONObject()
                 .put("ticket", ticket)
                 .put("deviceName", deviceName.ifBlank { DEFAULT_DEVICE_NAME })
                 .put("platform", PLATFORM)
+                .apply {
+                    // 仅身份标识，不是 token；校验通过才发送。
+                    if (deviceId != null) put("clientDeviceId", deviceId)
+                }
                 .toString()
         } catch (t: Throwable) {
             return Result.failure(t)
@@ -212,10 +228,11 @@ class AuthGateClient {
         fingerprint: String,
         ticket: String,
         deviceName: String,
+        clientDeviceId: String,
         onResult: (Result<DeviceGrant>) -> Unit
     ) {
         WORKERS.execute {
-            val result = redeem(baseUrl, fingerprint, ticket, deviceName)
+            val result = redeem(baseUrl, fingerprint, ticket, deviceName, clientDeviceId)
             MAIN.post {
                 try {
                     onResult(result)

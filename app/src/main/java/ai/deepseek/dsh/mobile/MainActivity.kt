@@ -804,12 +804,16 @@ class MainActivity : ComponentActivity() {
 
         // 二维码的 n=<机器名> 是“服务器”名称，不能当设备名；设备名一律取本机型号。
         val deviceName = defaultDeviceName()
+        // v0.4.6：稳定设备标识，服务端按它去重同一设备的重复配对；
+        // 「忘记设备 / 重新配对」不会重置（见 SessionStore.clear 的保留逻辑）。
+        val clientDeviceId = ClientDeviceId.get(this)
 
         authGateClient.redeemAsync(
             baseUrl = payload.baseUrl,
             fingerprint = payload.certSha256,
             ticket = payload.ticket,
-            deviceName = deviceName
+            deviceName = deviceName,
+            clientDeviceId = clientDeviceId
         ) { result ->
             redeemInFlight = false
             dismissRedeemProgress()
@@ -2319,9 +2323,9 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun showAbout() {
         val versionName = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.5"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "0.4.6"
         } catch (t: Throwable) {
-            "0.4.5"
+            "0.4.6"
         }
 
         // v0.4.3：版本号 TextView 是「直连模式」隐藏入口（连续点击 7 次解锁/锁定）；

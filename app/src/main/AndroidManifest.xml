@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- DSH Mobile v0.4.5（versionCode 12）：App 内「最近下载」兜底；下载按 MIME 分流到 Pictures/Movies/Music，文档仍在 Download；Q+ 补一次媒体扫描；WebView/配对/菜单能力延续 v0.4.4。 -->
+<!-- DSH Mobile v0.4.6（versionCode 13）：配对兑换时上报稳定 clientDeviceId，服务端按设备去重重复配对；设备标识在「忘记设备/重新配对」后保留；其余能力延续 v0.4.5。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />

@@ -219,10 +219,21 @@ class SessionStore(context: Context) {
         }
     }
 
-    /** 清除全部配对状态（含当前服务器 deviceToken）。 */
+    /**
+     * 清除全部配对状态（含当前服务器 deviceToken）。
+     *
+     * v0.4.6：保留 [AppConfig.KEY_CLIENT_DEVICE_ID]。该值只用于服务端识别“同一台设备”，
+     * 不是认证凭据；「忘记设备 / 重新配对」后重新扫码仍应命中同一条设备记录。
+     * 只有清除应用数据或卸载才会丢失（之后尽力由 ANDROID_ID 恢复）。
+     */
     fun clear() {
         val url = serverUrl
-        prefs.edit().clear().apply()
+        val clientDeviceId = prefs.getString(AppConfig.KEY_CLIENT_DEVICE_ID, null)
+        val editor = prefs.edit().clear()
+        if (!clientDeviceId.isNullOrBlank()) {
+            editor.putString(AppConfig.KEY_CLIENT_DEVICE_ID, clientDeviceId)
+        }
+        editor.apply()
         if (url != null) {
             deviceTokens.clear(url)
         }

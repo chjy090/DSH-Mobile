@@ -16,6 +16,14 @@ object AppConfig {
     const val KEY_TOKEN = "token"
 
     /**
+     * v0.4.6：稳定的客户端设备标识（服务端按它去重同一设备的重复配对）。
+     *
+     * 仅身份标识、非认证秘密；「忘记此设备 / 重新配对」不清除，
+     * 见 [ClientDeviceId] 与 [SessionStore.clear]。
+     */
+    const val KEY_CLIENT_DEVICE_ID = "client_device_id"
+
+    /**
      * v0.4.3：界面偏好（与配对状态分开存），避免「忘记此设备」/重新配对时
      * [SessionStore.clear] 清空 `dsh_mobile_prefs` 顺带把直连模式解锁状态重置。
      */

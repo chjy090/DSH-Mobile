@@ -1,6 +1,6 @@
 # DSH Mobile 安装与配置指南
 
-> 适用客户端：**DSH Mobile v0.4.5**（versionCode `12`，applicationId `ai.deepseek.dsh.mobile`）
+> 适用客户端：**DSH Mobile v0.4.6**（versionCode `13`，applicationId `ai.deepseek.dsh.mobile`）
 >
 > 配套服务端：`dsh` + [`dsh-pairing-gate`](https://github.com/chjy090/dsh-pairing-gate) v0.4.0 及以上（原名 `dsh-auth-gate`）。
 > 其中「认证网关模式」的扫码配对、设备令牌与自动续期需要该插件；`publicFingerprint`
@@ -57,6 +57,9 @@
 >
 > v0.4.3 起配对页新增「从相册选择二维码」（无需相机/存储权限），直连模式默认隐藏；
 > 解锁方式与限制见 §4.7。
+>
+> v0.4.6 起 App 在配对兑换（redeem）时上报稳定的 `clientDeviceId`；服务端 v0.7.3 及以上
+> 按它去重，同一台设备重复扫码配对只保留一条设备记录（详见 §5.11）。
 
 ### 1.3 网络
 
@@ -95,7 +98,7 @@ Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。�
 ### 1.5 开始前检查清单
 
 - [ ] 手机为 Android 8.0+，能安装 APK。
-- [ ] 已取得 `DSH-Mobile-v0.4.5-release.apk`，SHA-256 与 §2.2 一致。
+- [ ] 已取得 `DSH-Mobile-v0.4.6-release.apk`，SHA-256 与 §2.2 一致。
 - [ ] 服务端 `dsh` 与 `dsh-pairing-gate` 正常运行。
 - [ ] 手机浏览器能打开 `https://<host>:3443/__auth/login`（自签证书会先提示，属正常）。
 - [ ] 管理页 `/__admin` 已完成初始化，TOTP 可正常生成 6 位验证码。
@@ -110,26 +113,26 @@ Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。�
 
 发布页：
 
-- 版本页：<https://github.com/chjy090/DSH-Mobile/releases/tag/v0.4.5>（由 Lead 验证后发布）
+- 版本页：<https://github.com/chjy090/DSH-Mobile/releases/tag/v0.4.6>（由 Lead 验证后发布）
 - APK 直链：
-  <https://github.com/chjy090/DSH-Mobile/releases/download/v0.4.5/DSH-Mobile-v0.4.5-release.apk>
+  <https://github.com/chjy090/DSH-Mobile/releases/download/v0.4.6/DSH-Mobile-v0.4.6-release.apk>
 
-v0.4.5 的 Release 资产：
+v0.4.6 的 Release 资产：
 
 | 文件 | 说明 |
 | --- | --- |
-| `DSH-Mobile-v0.4.5-release.apk` | 签名后的 release APK |
-| `SHA256SUMS-v0.4.5.txt` | APK 的 SHA-256 校验文件 |
-| `release-notes-v0.4.5.md` | 发布说明 |
+| `DSH-Mobile-v0.4.6-release.apk` | 签名后的 release APK |
+| `SHA256SUMS-v0.4.6.txt` | APK 的 SHA-256 校验文件 |
+| `release-notes-v0.4.6.md` | 发布说明 |
 
 当前构建版本信息（本地 `deliverables/` 与构建产物已核对；GitHub Release 待 Lead 发布）：
 
 | 项目 | 值 |
 | --- | --- |
-| versionName | `0.4.5` |
-| versionCode | `12` |
-| 文件大小 | 25,541,227 字节（约 24.36 MiB） |
-| SHA-256 | `3eb4394d9ceb50c7d8ec3e8cc4e0a6a88e8428001d3379e8e825100b52cbb4e3` |
+| versionName | `0.4.6` |
+| versionCode | `13` |
+| 文件大小 | 25,541,231 字节（约 24.36 MiB） |
+| SHA-256 | `9059696911fa68db690d534fe273670950ccd66add448c4462493fe69b96f9c4` |
 | 签名证书 SHA-256 | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
 
 > 只从上述官方 Release 或你信任的内部渠道获取 APK。不要使用来源不明的“破解版”“去广告版”
@@ -143,27 +146,27 @@ Linux/macOS：
 
 ```bash
 cd ~/Downloads
-sha256sum DSH-Mobile-v0.4.5-release.apk
-# macOS 也可用：shasum -a 256 DSH-Mobile-v0.4.5-release.apk
+sha256sum DSH-Mobile-v0.4.6-release.apk
+# macOS 也可用：shasum -a 256 DSH-Mobile-v0.4.6-release.apk
 ```
 
 期望输出：
 
 ```text
-3eb4394d9ceb50c7d8ec3e8cc4e0a6a88e8428001d3379e8e825100b52cbb4e3  DSH-Mobile-v0.4.5-release.apk
+9059696911fa68db690d534fe273670950ccd66add448c4462493fe69b96f9c4  DSH-Mobile-v0.4.6-release.apk
 ```
 
-如果同时下载了 `SHA256SUMS-v0.4.5.txt`，可在同一目录执行：
+如果同时下载了 `SHA256SUMS-v0.4.6.txt`，可在同一目录执行：
 
 ```bash
-sha256sum -c SHA256SUMS-v0.4.5.txt
-# 期望：DSH-Mobile-v0.4.5-release.apk: OK
+sha256sum -c SHA256SUMS-v0.4.6.txt
+# 期望：DSH-Mobile-v0.4.6-release.apk: OK
 ```
 
 Windows PowerShell：
 
 ```powershell
-Get-FileHash .\DSH-Mobile-v0.4.5-release.apk -Algorithm SHA256
+Get-FileHash .\DSH-Mobile-v0.4.6-release.apk -Algorithm SHA256
 ```
 
 哈希不一致时**不要安装**，重新下载并再次校验。
@@ -175,7 +178,7 @@ Get-FileHash .\DSH-Mobile-v0.4.5-release.apk -Algorithm SHA256
 ```bash
 export ANDROID_HOME=/path/to/android-sdk
 "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
-  --verbose --print-certs DSH-Mobile-v0.4.5-release.apk
+  --verbose --print-certs DSH-Mobile-v0.4.6-release.apk
 ```
 
 期望结果包含：
@@ -194,13 +197,13 @@ DSH Mobile，否则会因签名不一致失败；也不要信任该文件。
 
 ```bash
 "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging \
-  DSH-Mobile-v0.4.5-release.apk | head -n 8
+  DSH-Mobile-v0.4.6-release.apk | head -n 8
 ```
 
 应能看到：
 
 ```text
-package: name='ai.deepseek.dsh.mobile' versionCode='12' versionName='0.4.5' ...
+package: name='ai.deepseek.dsh.mobile' versionCode='13' versionName='0.4.6' ...
 minSdkVersion:'26'
 targetSdkVersion:'35'
 ```
@@ -225,13 +228,13 @@ targetSdkVersion:'35'
 
 ```bash
 adb devices                 # 确认设备已授权
-adb install DSH-Mobile-v0.4.5-release.apk
+adb install DSH-Mobile-v0.4.6-release.apk
 ```
 
 已安装同签名旧版本时，覆盖安装：
 
 ```bash
-adb install -r DSH-Mobile-v0.4.5-release.apk
+adb install -r DSH-Mobile-v0.4.6-release.apk
 ```
 
 安装后确认版本：
@@ -243,11 +246,11 @@ adb shell dumpsys package ai.deepseek.dsh.mobile | grep -E "versionCode|versionN
 期望类似：
 
 ```text
-versionCode=12 minSdk=26 targetSdk=35
-versionName=0.4.5
+versionCode=13 minSdk=26 targetSdk=35
+versionName=0.4.6
 ```
 
-> v0.4.5 的 release APK 使用 v2 签名方案；Android 8.0+ 支持。不要用 `adb install` 安装
+> v0.4.6 的 release APK 使用 v2 签名方案；Android 8.0+ 支持。不要用 `adb install` 安装
 > `app-debug.apk` 去覆盖 release 包，debug 与 release 签名不同，会报
 > `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。
 
@@ -265,8 +268,8 @@ versionName=0.4.5
 
 ### 2.5 versionCode 与 versionName
 
-- `versionName` 是给人看的版本号（`0.4.5`），App「关于」对话框显示的是它。
-- `versionCode` 是给 Android 比较新旧的整数（`12`）。正常安装要求新包的 versionCode
+- `versionName` 是给人看的版本号（`0.4.6`），App「关于」对话框显示的是它。
+- `versionCode` 是给 Android 比较新旧的整数（`13`）。正常安装要求新包的 versionCode
   不低于已安装版本；降级需要显式允许（`adb install -r -d`）。
 - 覆盖升级时 Android 还会校验签名证书一致；versionCode 高但签名不同同样无法安装。
 
@@ -462,7 +465,7 @@ https://auth.example.com:8443/__auth/pair#v=1&t=<一次性ticket>&fp=<64位证�
 
 ### 4.5 配对成功的检查
 
-- [ ] App「关于」显示 `0.4.5`。
+- [ ] App「关于」显示 `0.4.6`。
 - [ ] 管理页「设备」出现一条以手机型号命名的设备，平台显示为 `安卓`/`android`。
 - [ ] 登录后能看到 `dsh` Web GUI，而不是停在登录页或错误页。
 - [ ] 返回手势能弹出「应用菜单」。
@@ -575,7 +578,8 @@ v0.4.1 起不再有“再按一次返回退出”，退出请用菜单里的「�
 - 「退出当前会话」不是“退出 App”，也不会解除设备绑定；下次**冷启动**仍会用 deviceToken
   静默自动登录。当前进程内不会立刻把刚退出的会话建回来。
 - 「忘记此设备」会删除本机凭据；服务端设备记录不会自动消失（可在管理页吊销/等待过期），
-  但本机必须重新扫码才能再次登录。
+  但本机必须重新扫码才能再次登录。v0.4.6 起本机 `clientDeviceId` 会被保留，
+  服务端 v0.7.3+ 因此可把重新配对识别为同一台设备（见 §5.11）。
 - 如果退出会话请求失败/超时（约 4 秒兜底），App 会尽量清理本地 session 并回登录页；
   若页面仍异常，可用「刷新」或「忘记此设备」。
 - 「退出应用」只结束界面，后台/系统仍可能保留进程；再次打开会重新加载。
@@ -708,6 +712,45 @@ App 没有接口强制把任意文档注入厂商「最近」。v0.4.5 的应对
 
 > 因此：系统「最近」不显示文档**不是下载失败**。请优先用 App 内「最近下载」或
 > 「文件 → 下载」；只有图片/视频/音频才建议到系统图库/相册的「最近」查看。
+
+### 5.11 设备标识 `clientDeviceId` 与重复配对去重（v0.4.6）
+
+**为什么需要**：认证网关默认可绑定 8 台设备。旧版本每次扫码配对都会在服务端新建一条设备记录，
+同一台手机反复“忘记设备 → 重新扫码”会占满名额，需要管理员手动吊销。
+
+**做法**：App 生成并持久化一个稳定的 `clientDeviceId`，在配对兑换请求
+（`POST /__auth/pair/redeem` 的 JSON body）中作为 `"clientDeviceId"` 上报。
+服务端 v0.7.3 及以上按该值去重：命中未过期的同 ID 设备时复用原记录、轮换 deviceToken、
+清空该设备的旧会话，且不占用新的设备名额；因此重新配对后管理页仍只有一条记录，旧会话失效。
+格式非法的值会被服务端以 `400 invalid_client_device_id` 拒绝（且不消耗配对 ticket）。
+旧服务端会忽略未知字段，配对流程不受影响，只是仍可能产生重复记录。
+
+**生成与持久化**（`ClientDeviceId.kt`）：
+
+1. 先读 SharedPreferences（`dsh_mobile_prefs`）中的 `client_device_id`，格式合法（标准 UUID，
+   或 8–64 位安全字符 `[A-Za-z0-9._-]`）就直接使用；
+2. 否则用系统 `Settings.Secure.ANDROID_ID`（非空且非已知坏值）派生
+   `UUID.nameUUIDFromBytes("dsh-mobile:<ANDROID_ID>:<applicationId>")`；
+3. 再否则用 `UUID.randomUUID()`；
+4. 结果写回 SharedPreferences，供后续所有配对复用。
+
+**不会被重置的场景**：「忘记此设备（重新配对）」、「退出当前会话」、重新扫码配对。
+**会丢失的场景**：系统「清除数据」或卸载（SharedPreferences 被删除）。丢失后 App 会尽量用
+`ANDROID_ID` 重新派生同一个值；如果 ROM 的 `ANDROID_ID` 也变了或不可用，才会生成新值，
+此时服务端会把它视为一台新设备。
+
+**隐私与安全**：
+
+- 它只是**设备身份标识，不是认证秘密**，不能用于登录、续期或换取 deviceToken；
+- 不读取 `IMEI`、硬件序列号等不可重置标识，也不新增任何权限；
+- 来源是随机 UUID 或 `ANDROID_ID` 的单向散列派生值（UUID v3，name-based），不包含硬件序列号；
+- **不打印到日志/诊断**：完整值与前 8 位都不会输出（App 也没有查看该标识的界面入口）；
+  App 也不会在日志中打印 ticket/token/cookie。
+
+**如何核对**：在服务端管理页「设备」tab 连续两次配对同一台手机，v0.7.3+ 应只有一条以该手机
+型号命名的记录；旧记录若已存在，可能需要先手动吊销或等待过期。App 侧没有展示
+`clientDeviceId` 的入口，日志中也不输出其内容（完整值和前 8 位均无），因此核对只能以服务端
+设备列表与 UI 行为为准（见 `docs/manual-validation.md` §15）。
 
 ---
 
@@ -902,6 +945,7 @@ openssl s_client -connect auth.example.com:8443 -servername auth.example.com </d
   `keepDeviceCookie = false`）；
 - 清除本地配对信息：服务器地址、证书 pin、认证网关标记、首次登录/设备可信标记、
   设备有效期、旧直连 token；
+- **保留** `clientDeviceId`（v0.4.6，仅用于服务端去重，不是凭据）；
 - 重置续期/退出状态，回到「连接 DSH Host」配对页。
 
 它**不会**：
@@ -912,8 +956,8 @@ openssl s_client -connect auth.example.com:8443 -servername auth.example.com </d
 
 因此：
 
-- 同一台手机重新配对后，管理页可能出现一条新设备记录，旧记录不会自动消失；
-  反复重配可能占满 8 台，需要到「设备」tab 手动「吊销」旧记录。
+- 同一台手机重新配对后：服务端 v0.7.3+ 按 `clientDeviceId` 去重，管理页只保留一条记录；
+  旧服务端（< v0.7.3）仍会新增记录，反复重配可能占满 8 台，需要到「设备」tab 手动「吊销」旧记录。
 - 重新配对后必须重新完成网关登录（用户名 + 密码；即使旧 session 还在，App 已清掉本地 Cookie）。
 - **v0.4.2 起「忘记此设备」是唯一会删除本机设备凭据的菜单项**；只想结束当前登录会话请用
   下一节的「退出当前会话」。
@@ -984,6 +1028,10 @@ adb shell pm clear ai.deepseek.dsh.mobile
 ```
 
 清除后 App 回到未配对状态，需要重新扫码；服务端设备记录不会自动删除，需在管理页吊销。
+
+> v0.4.6：清除数据会同时删除 `clientDeviceId`。下次配对时 App 会尝试从 `ANDROID_ID`
+> 恢复同一个值，因此服务端 v0.7.3+ 通常仍能识别为同一台设备；若 `ANDROID_ID` 不可用或已变化，
+> 则新值会被视为新设备。只想换配对而保留设备身份时，请用「忘记此设备」而不是清除数据。
 
 ### 7.6 本地操作与服务端效果对照
 
@@ -1118,7 +1166,9 @@ App 内：
 - 来源包括 WebView console、JS 桥、TLS pin、下载等；
 - 写入时会对 URL 中的 `token=` 参数做 `<REDACTED>` 脱敏；
 - **不会自动附带** App 版本、设备型号、服务端版本；请在反馈时另附「关于」里的
-  versionName（`0.4.5`）和 Android 版本；
+  versionName（`0.4.6`）和 Android 版本；
+- v0.4.6 的 `clientDeviceId` 不会打印到 logcat 或诊断日志，App 界面也不展示
+  （完整值与前 8 位均不输出，见 §5.11）。
 - 日志可能仍包含服务器地址、页面片段、错误堆栈；发送前请自行检查，
   **不要**附带密码、TOTP、deviceToken、Cookie、配对二维码或截图。
 
@@ -1171,7 +1221,10 @@ adb logcat -s DSHMobile DSHAuthGate DSHQrScan DSHDeviceToken
 10. **只从官方 Release 下载 APK 并校验 SHA-256/签名**。不要安装第三方修改版；它会接触你的
     服务器地址、密码和设备令牌。
 11. App `allowBackup=false`，配对数据不进入系统备份；换机/恢复出厂后需重新配对。
-12. 服务端管理密钥（`admin.key`）只保存在服务器（0600），不要写进 App、脚本或公开文档；
+12. **`clientDeviceId` 不是凭据**（v0.4.6）：它只用于服务端对重复配对去重，不能登录或续期；
+    来源是随机 UUID 或 `ANDROID_ID` 的不可逆派生值，不含硬件序列号，App 不读取 `IMEI`/序列号，
+    也不新增权限；不打印到日志或诊断（完整值与前 8 位均不输出）。
+13. 服务端管理密钥（`admin.key`）只保存在服务器（0600），不要写进 App、脚本或公开文档；
     管理页只通过 HTTPS 访问。
 
 ---
@@ -1182,12 +1235,26 @@ adb logcat -s DSHMobile DSHAuthGate DSHQrScan DSHDeviceToken
 
 | 版本 | versionCode | APK | SHA-256 | 签名证书 SHA-256 |
 | --- | --- | --- | --- | --- |
-| v0.4.5（当前） | 12 | `DSH-Mobile-v0.4.5-release.apk` | `3eb4394d9ceb50c7d8ec3e8cc4e0a6a88e8428001d3379e8e825100b52cbb4e3` | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
+| v0.4.6（当前） | 13 | `DSH-Mobile-v0.4.6-release.apk` | `9059696911fa68db690d534fe273670950ccd66add448c4462493fe69b96f9c4` | `45dee26ac9aa785dda281970bc07072665624ef381616d310331f849216f62c8` |
+| v0.4.5 | 12 | `DSH-Mobile-v0.4.5-release.apk` | `3eb4394d9ceb50c7d8ec3e8cc4e0a6a88e8428001d3379e8e825100b52cbb4e3` | 同上 |
 | v0.4.4 | 11 | `DSH-Mobile-v0.4.4-release.apk` | `860f90638d1d8e66094452c703eb4d74b17f28c38e1bc9c123a6ab7a383a8126` | 同上 |
 | v0.4.3 | 10 | `DSH-Mobile-v0.4.3-release.apk` | `35cfdfbae6c97b1bbb1821f36b55b459246c784fffafa23da84153091ddf0304` | 同上 |
 | v0.4.2 | 9 | `DSH-Mobile-v0.4.2-release.apk` | `1ad91b691e183c03039c5f6e88a3639c9474a68a06b6b96f2620d3e9b61b3495` | 同上 |
 | v0.4.1 | 8 | `DSH-Mobile-v0.4.1-release.apk` | `a9ad7979c1487e31b0c55ba374c39aed6e3f5b5990c3421ebf38748838848e80` | 同上 |
 | v0.4.0 | 7 | `DSH-Mobile-v0.4.0-release.apk` | `5d19e16e9445fc54e94f82ba1e89f356ceed03df71c7dbc726847b16c35552c5` | 同上 |
+
+v0.4.5 → v0.4.6 的主要变化：
+
+- **配对上报稳定 `clientDeviceId`**：App 生成并持久化该标识（`ClientDeviceId.kt`），
+  配对兑换（`POST /__auth/pair/redeem`）JSON body 新增 `clientDeviceId` 字段；
+  服务端 v0.7.3+ 据此去重，同一设备重复配对只保留一条设备记录。旧服务端忽略该字段，
+  无需降级。
+- **设备标识生命周期**：「忘记此设备 / 重新配对」不会重置，只有清除数据/卸载才会丢失；
+  丢失后尽量由 `ANDROID_ID` 确定性恢复，再退化为随机 UUID。
+- **隐私**：该标识不是认证秘密，不含硬件序列号，不新增权限；不打印到日志/诊断
+  （完整值与前 8 位均不输出）。
+- 未新增权限/依赖；配对、TLS、Cookie、下载、菜单与静默登录逻辑不变。
+- 版本号 `0.4.6` / versionCode `13`。
 
 v0.4.4 → v0.4.5 的主要变化：
 
@@ -1261,17 +1328,17 @@ v0.4.0 → v0.4.1 的主要变化：
 
 ### 10.2 覆盖升级
 
-同签名（官方 v0.4.4 → v0.4.5，或更早的 v0.4.x → v0.4.5）：
+同签名（官方 v0.4.5 → v0.4.6，或更早的 v0.4.x → v0.4.6）：
 
 1. 下载并校验新 APK（§2.2）。
 2. 点击安装，系统显示「更新」；或：
 
    ```bash
-   adb install -r DSH-Mobile-v0.4.5-release.apk
+   adb install -r DSH-Mobile-v0.4.6-release.apk
    ```
 
 3. 数据保留：服务器地址、pin、加密 deviceToken、WebView Cookie 均保留；升级后无需重新配对。
-4. 打开 App →「关于」确认版本为 `0.4.5`；已登录过的网关设备应静默进入 GUI，再打开应用菜单确认出现「最近下载」。
+4. 打开 App →「关于」确认版本为 `0.4.6`；已登录过的网关设备应静默进入 GUI，再打开应用菜单确认「最近下载」仍在。
 5. 直连模式若解锁过会继续显示；配对页默认只保留扫码/相册两个入口。
 
 ### 10.3 回滚到旧版本
@@ -1283,8 +1350,9 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 ```
 
 - `-d` 允许 versionCode 降低；仍需签名一致。
-- 一般保留数据；v0.4.0–v0.4.5 的配对数据结构兼容（v0.4.2 只新增非敏感的可选标记；
-  v0.4.3 的直连解锁标记保存在独立 UI SharedPreferences，不属于配对数据）。
+- 一般保留数据；v0.4.0–v0.4.6 的配对数据结构兼容（v0.4.2 只新增非敏感的可选标记；
+  v0.4.3 的直连解锁标记保存在独立 UI SharedPreferences，不属于配对数据；
+  v0.4.6 的 `client_device_id` 与旧版本互不依赖，旧版本会忽略它）。
 - 部分厂商系统/安装器可能仍拒绝降级；此时只能卸载后安装（会清数据，需重新配对）。
 - 回滚前建议确认新版本问题是否与 App 有关（也可能是服务端/网络），并记录配对信息。
 
@@ -1292,7 +1360,7 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 
 ### 10.4 升级后检查
 
-- [ ] 「关于」显示 `0.4.5`；认证网关模式还会显示「设备有效期至：…」或「—」。
+- [ ] 「关于」显示 `0.4.6`；认证网关模式还会显示「设备有效期至：…」或「—」。
 - [ ] 配对页默认只有「扫码配对」「从相册选择二维码」；「关于」连点版本号 7 次后出现可展开直连区域，
       再连点 7 次消失（Toast 分别提示「直连模式已解锁」「直连模式已锁定」）。
 - [ ] 「从相册选择二维码」选原图截图可完成配对；选无二维码图片只 Toast 失败提示，不崩溃。
@@ -1306,6 +1374,8 @@ adb install -r -d DSH-Mobile-v0.4.0-release.apk
 - [ ] 应用菜单 →「最近下载」能看到本次下载；点击可打开；「清除记录」后列表清空但文件仍在。
 - [ ] Android 10+ 前台下载完成后「打开」入口仍可用；Android 8/9 从「最近下载」可打开文件。
 - [ ] 语音/剪贴板按需可用。
+- [ ] 服务端为 v0.7.3+ 时：「忘记此设备」→ 重新扫码配对同一台手机 → 管理页「设备」仍只有一条记录，
+      且能正常重新登录（详见 §5.11）。
 - [ ] 若提示 `CERT_CHANGED`，检查是否在升级期间更换了证书/代理（见 §6.3）。
 
 ---
@@ -1451,12 +1521,14 @@ sha256sum app/build/outputs/apk/release/app-release.apk
 
 ## 文档核对说明
 
-- 本文按 DSH Mobile v0.4.5 源码（`MainActivity`、`WebHost`、`Downloader`、`DownloadHistory`、
-  `AuthGateClient`、`CertPin`、`DeviceTokenStore`、`QrPairPayload`、`QrScanActivity`、`SessionStore`、
-  `Diagnostics`）与 `dsh-pairing-gate` v0.6.2 源码/README 核对。v0.4.5 的「最近下载」在
-  `DownloadHistory.kt` + `MainActivity.kt`（菜单/对话框）+ `WebHost.kt`（成功写入）；媒体类型分流、
-  目标集合查重与额外媒体扫描在 `Downloader.kt`；Android 8/9 打开用 `FileProvider`
-  （`AndroidManifest.xml` + `res/xml/file_paths.xml`）。未新增 Activity、权限或第三方依赖。
+- 本文按 DSH Mobile v0.4.6 源码（`MainActivity`、`WebHost`、`Downloader`、`DownloadHistory`、
+  `ClientDeviceId`、`AuthGateClient`、`CertPin`、`DeviceTokenStore`、`QrPairPayload`、`QrScanActivity`、
+  `SessionStore`、`Diagnostics`）与 `dsh-pairing-gate` v0.6.2/v0.7.3 源码/README 核对。v0.4.6 的
+  `clientDeviceId` 生成/持久化在 `ClientDeviceId.kt`（`AppConfig.PREFS` 的 `client_device_id`），
+  由 `MainActivity.startRedeem` 读取并随 `AuthGateClient.redeem` 上报；`SessionStore.clear` 会保留该键。
+  v0.4.5 的「最近下载」在 `DownloadHistory.kt` + `MainActivity.kt`（菜单/对话框）+ `WebHost.kt`
+  （成功写入）；媒体类型分流、目标集合查重与额外媒体扫描在 `Downloader.kt`；Android 8/9 打开用
+  `FileProvider`（`AndroidManifest.xml` + `res/xml/file_paths.xml`）。未新增 Activity、权限或第三方依赖。
 - APK 的 SHA-256、签名证书、versionCode 与 ABI 已在构建机用 `sha256sum`、`apksigner`、
   `aapt2` 核对；真机上的权限弹窗、厂商设置路径和返回手势行为可能因 Android 版本/OEM 不同，
   请按实际界面操作。
