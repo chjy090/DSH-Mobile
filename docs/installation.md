@@ -2,9 +2,9 @@
 
 > 适用客户端：**DSH Mobile v0.4.5**（versionCode `12`，applicationId `ai.deepseek.dsh.mobile`）
 >
-> 配套服务端：`dsh` + [`dsh-auth-gate`](https://github.com/chjy090/dsh-auth-gate) v0.4.0 及以上。
+> 配套服务端：`dsh` + [`dsh-pairing-gate`](https://github.com/chjy090/dsh-pairing-gate) v0.4.0 及以上（原名 `dsh-auth-gate`）。
 > 其中「认证网关模式」的扫码配对、设备令牌与自动续期需要该插件；`publicFingerprint`
-> （反向代理证书指纹）需要 `dsh-auth-gate` v0.6.2 及以上。
+> （反向代理证书指纹）需要 `dsh-pairing-gate` v0.6.2 及以上。
 >
 > 本文以**认证网关模式（推荐）**为主线；旧的「服务器地址 + 访问令牌」直连模式作为兼容方式
 > 放在 §4.7（v0.4.3 起默认隐藏，需在「关于」里连点版本号 7 次解锁）。
@@ -38,7 +38,7 @@
 ### 1.2 服务端
 
 - 已部署并运行 `dsh`（DeepSeek Harness）。
-- 已安装并启用 `dsh-auth-gate` 插件（v0.4.0+）。插件负责：
+- 已安装并启用 `dsh-pairing-gate` 插件（v0.4.0+）。插件负责：
   - 生成一次性配对二维码（生成时校验 6 位 TOTP）；
   - 提供 `https://<host>:3443` 的认证网关与登录页；
   - 用户名 + 密码登录（**登录时不再输入 TOTP**，设备绑定即第二因素）；
@@ -96,7 +96,7 @@ Android 10（API 29）及以上下载走 MediaStore，不需要存储权限。�
 
 - [ ] 手机为 Android 8.0+，能安装 APK。
 - [ ] 已取得 `DSH-Mobile-v0.4.5-release.apk`，SHA-256 与 §2.2 一致。
-- [ ] 服务端 `dsh` 与 `dsh-auth-gate` 正常运行。
+- [ ] 服务端 `dsh` 与 `dsh-pairing-gate` 正常运行。
 - [ ] 手机浏览器能打开 `https://<host>:3443/__auth/login`（自签证书会先提示，属正常）。
 - [ ] 管理页 `/__admin` 已完成初始化，TOTP 可正常生成 6 位验证码。
 - [ ] 服务端时间准确。
@@ -275,7 +275,7 @@ versionName=0.4.5
 ## 3. 服务端准备与自检
 
 本节只做 App 配对所需的最小检查；插件的完整安装、初始化、TOTP 绑定与 frp 配置请以
-[`dsh-auth-gate` README](https://github.com/chjy090/dsh-auth-gate) 为准。
+[`dsh-pairing-gate` README](https://github.com/chjy090/dsh-pairing-gate) 为准。
 
 ### 3.1 确认网关在监听
 
@@ -309,7 +309,7 @@ curl -k -sS -o /dev/null -w '%{http_code}\n' https://<host>:3443/__auth/login
 - `dsh` 未启动。查看服务端日志：
 
 ```bash
-journalctl -u dsh -n 200 --no-pager | grep -iE 'auth-gate|listening|error'
+journalctl -u dsh -n 200 --no-pager | grep -iE 'gate|listening|error'
 ```
 
 （服务名按你的 systemd 单元调整。）
@@ -490,7 +490,7 @@ v0.4.3 起配对页**默认只显示**「扫码配对」与「从相册选择二
 只有系统「清除数据」或卸载才恢复默认隐藏。公网/不可信网络必须使用扫码配对（严格证书 pin），
 不要把直连模式当作认证网关的替代方案。
 
-如果服务端没有安装 `dsh-auth-gate`，解锁后仍可使用 v0.3.0 以来的直连模式：
+如果服务端没有安装 `dsh-pairing-gate`，解锁后仍可使用 v0.3.0 以来的直连模式：
 
 1. 在 `dsh` 启动日志/管理方式中取得 Web GUI 入口地址，形如
    `https://<host>:3080/?token=<token>`。
@@ -718,7 +718,7 @@ App 没有接口强制把任意文档注入厂商「最近」。v0.4.5 的应对
 最简单的部署：
 
 ```text
-手机 ──HTTPS(3443)──> dsh-auth-gate ──HTTPS/反代──> dsh (3080)
+手机 ──HTTPS(3443)──> dsh-pairing-gate ──HTTPS/反代──> dsh (3080)
 ```
 
 - 服务端 `publicUrl` 设为 `https://<host>:3443`，`publicFingerprint` 留空。
@@ -741,7 +741,7 @@ App 没有接口强制把任意文档注入厂商「最近」。v0.4.5 的应对
 手机 ──HTTPS(8443, Caddy 证书)──> VPS Caddy
                                     │  HTTPS 回源（tls_insecure_skip_verify）
                                     ▼
-                             frps ──> frpc ──> dsh-auth-gate (https://<host>:3443, 自签)
+                             frps ──> frpc ──> dsh-pairing-gate (https://<host>:3443, 自签)
                                                         │
                                                         └──> dsh (https://<host>:3080，不暴露)
 ```
@@ -1070,7 +1070,7 @@ adb shell pm clear ai.deepseek.dsh.mobile
 
 ### 8.5 页面黑屏/白屏
 
-认证网关模式下，页面由 `dsh-auth-gate` 反代 `dsh`；黑屏/白屏常见原因：
+认证网关模式下，页面由 `dsh-pairing-gate` 反代 `dsh`；黑屏/白屏常见原因：
 
 | 原因 | 表现 | 处理 |
 | --- | --- | --- |
@@ -1125,14 +1125,14 @@ App 内：
 反馈时建议提供：
 
 - App 版本（关于对话框）、手机型号/Android 版本；
-- 服务端 `dsh` 与 `dsh-auth-gate` 版本；
+- 服务端 `dsh` 与 `dsh-pairing-gate` 版本；
 - 出问题的地址类型（内网/公网，不要发真实 token）；
 - 错误码原文（如 `HTTP 401 · origin_changed`）与操作步骤；
 - 诊断日志复制内容；
 - 服务端相关日志（注意脱敏）：
 
 ```bash
-journalctl -u dsh -n 200 --no-pager | grep -iE 'auth-gate|pair|login|error'
+journalctl -u dsh -n 200 --no-pager | grep -iE 'gate|pair|login|error'
 ```
 
 - 管理页「审计」tab 的最近记录（同样不要发密码/TOTP）。
@@ -1441,9 +1441,9 @@ sha256sum app/build/outputs/apk/release/app-release.apk
 
 - 客户端仓库：<https://github.com/chjy090/DSH-Mobile>
 - 客户端 Release：<https://github.com/chjy090/DSH-Mobile/releases>
-- 认证网关插件：<https://github.com/chjy090/dsh-auth-gate>
+- 认证网关插件：<https://github.com/chjy090/dsh-pairing-gate>
 - 插件 README（安装、初始化、frp、管理页、安全模型）：
-  <https://github.com/chjy090/dsh-auth-gate/blob/main/README.md>
+  <https://github.com/chjy090/dsh-pairing-gate/blob/main/README.md>
 - 本仓库 `README.md`：构建、签名、功能概览
 - 本文件：`docs/installation.md`
 
@@ -1453,7 +1453,7 @@ sha256sum app/build/outputs/apk/release/app-release.apk
 
 - 本文按 DSH Mobile v0.4.5 源码（`MainActivity`、`WebHost`、`Downloader`、`DownloadHistory`、
   `AuthGateClient`、`CertPin`、`DeviceTokenStore`、`QrPairPayload`、`QrScanActivity`、`SessionStore`、
-  `Diagnostics`）与 `dsh-auth-gate` v0.6.2 源码/README 核对。v0.4.5 的「最近下载」在
+  `Diagnostics`）与 `dsh-pairing-gate` v0.6.2 源码/README 核对。v0.4.5 的「最近下载」在
   `DownloadHistory.kt` + `MainActivity.kt`（菜单/对话框）+ `WebHost.kt`（成功写入）；媒体类型分流、
   目标集合查重与额外媒体扫描在 `Downloader.kt`；Android 8/9 打开用 `FileProvider`
   （`AndroidManifest.xml` + `res/xml/file_paths.xml`）。未新增 Activity、权限或第三方依赖。
@@ -1461,4 +1461,4 @@ sha256sum app/build/outputs/apk/release/app-release.apk
   `aapt2` 核对；真机上的权限弹窗、厂商设置路径和返回手势行为可能因 Android 版本/OEM 不同，
   请按实际界面操作。
 - App 的配对、登录、启动静默登录、前台续期、退出会话/忘记设备、菜单和证书 pin 行为以本仓库当前源码为准；服务端行为
-  （TOTP、设备有效期、限流、`origin_changed`）以 `dsh-auth-gate` 版本为准。
+  （TOTP、设备有效期、限流、`origin_changed`）以 `dsh-pairing-gate` 版本为准。

@@ -23,10 +23,10 @@ Web GUI，把桌面端的使用体验带到手机上。
 | 仓库 | 说明 |
 | --- | --- |
 | [DSH-Mobile](https://github.com/chjy090/DSH-Mobile) | Android 客户端（本仓库） |
-| [dsh-auth-gate](https://github.com/chjy090/dsh-auth-gate) | `dsh` 服务端认证网关插件，扫码配对与设备令牌所需 |
+| [dsh-pairing-gate](https://github.com/chjy090/dsh-pairing-gate) | 扫码配对/设备令牌所需的服务端网关插件（原名 `dsh-auth-gate`） |
 
 v0.4.0 起新增「认证网关模式」：扫码配对、证书 pin、设备令牌续期都依赖部署在 `dsh` 服务端的
-[dsh-auth-gate](https://github.com/chjy090/dsh-auth-gate) 插件。未部署插件时仍可使用原有的
+[dsh-pairing-gate](https://github.com/chjy090/dsh-pairing-gate) 插件。未部署插件时仍可使用原有的
 「服务器地址 + 访问令牌」直连模式；v0.4.3 起该模式默认隐藏，需在「关于」里连点版本号解锁。
 
 ## 功能特性
@@ -126,7 +126,7 @@ keytool -genkeypair -v -keystore signing/dsh-mobile.jks \
 2. 确保手机与运行 `dsh` 的机器网络互通。
 3. 选择配对方式：
    - **扫码配对（v0.4.0，推荐）**：服务端已部署并启用
-     [dsh-auth-gate](https://github.com/chjy090/dsh-auth-gate) 认证网关插件后，在 App 内打开扫码，
+     [dsh-pairing-gate](https://github.com/chjy090/dsh-pairing-gate) 认证网关插件后，在 App 内打开扫码，
      扫描网关生成的配对二维码，即可完成配对并进入网关登录页。首次配对必须输入用户名与密码
      （6 位 TOTP 在服务端生成配对二维码时校验）；登录过一次后，后续冷启动会静默自动登录（v0.4.2）。
    - **从相册选择二维码（v0.4.3）**：扫码按钮下方的「从相册选择二维码」，用系统照片选择器
